@@ -12,6 +12,7 @@ import {
 } from "@/lib/library-validation";
 
 const SYNC_FLAG = "nm-synced";
+const MAX_ATTEMPTS = 3;
 
 function readLibraryItems(key: string, usesLegacyId: boolean): LibraryItemInput[] {
 	const parsed: unknown = JSON.parse(localStorage.getItem(key) ?? "[]");
@@ -51,17 +52,48 @@ function readRatings(): RatingInput[] {
 	return ratings;
 }
 
+function wait(ms: number) {
+	return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function importWithRetry(
+	watchlist: LibraryItemInput[],
+	ratings: RatingInput[],
+	favorites: LibraryItemInput[],
+) {
+	let lastError: unknown;
+	for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+		try {
+			const result = await importLocalDataAction(watchlist, ratings, favorites);
+			if (!result.error) return result;
+			lastError = result.error;
+		} catch (error) {
+			lastError = error;
+		}
+		if (attempt < MAX_ATTEMPTS - 1) {
+			await wait(400 * 2 ** attempt);
+		}
+	}
+	throw lastError instanceof Error
+		? lastError
+		: new Error(typeof lastError === "string" ? lastError : "Import failed");
+}
+
 export default function WatchlistSync() {
 	const { user } = useLibrary();
 	const attemptedForUser = useRef<number | null>(null);
+	const inFlight = useRef(false);
 
 	useEffect(() => {
 		if (!user) return;
-		if (attemptedForUser.current === user.id) return;
-		attemptedForUser.current = user.id;
+		if (attemptedForUser.current === user.id || inFlight.current) return;
+
 		const syncKey = `${SYNC_FLAG}:${user.id}`;
 		try {
-			if (sessionStorage.getItem(syncKey)) return;
+			if (sessionStorage.getItem(syncKey)) {
+				attemptedForUser.current = user.id;
+				return;
+			}
 		} catch (error) {
 			console.error("[library] could not read sync state", error);
 		}
@@ -82,22 +114,21 @@ export default function WatchlistSync() {
 		if (!watchlist.length && !favorites.length && !ratings.length) {
 			try {
 				sessionStorage.setItem(syncKey, "1");
+				attemptedForUser.current = user.id;
 			} catch (error) {
 				console.error("[library] could not save sync state", error);
 			}
 			return;
 		}
 
-		void importLocalDataAction(watchlist, ratings, favorites)
-			.then(result => {
-				if (result.error) {
-					console.error("[library] local data import rejected", result.error);
-					return;
-				}
+		inFlight.current = true;
+		void importWithRetry(watchlist, ratings, favorites)
+			.then(() => {
 				localStorage.removeItem("nm-watchlist");
 				localStorage.removeItem("nm-ratings");
 				localStorage.removeItem("nm-favorites");
 				sessionStorage.setItem(syncKey, "1");
+				attemptedForUser.current = user.id;
 				window.dispatchEvent(new Event("nm-watchlist-changed"));
 				window.dispatchEvent(new Event("nm-ratings-changed"));
 				window.dispatchEvent(new Event("nm-favorites-changed"));
@@ -105,6 +136,9 @@ export default function WatchlistSync() {
 			})
 			.catch(error => {
 				console.error("[library] local data import failed", error);
+			})
+			.finally(() => {
+				inFlight.current = false;
 			});
 	}, [user]);
 

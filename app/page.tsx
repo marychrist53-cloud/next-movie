@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Suspense } from "react";
 import {
 	CalendarDays,
 	Clapperboard,
@@ -186,7 +187,9 @@ export default async function Home() {
 				<MovieGrid movies={trending.slice(0, PREVIEW_COUNT)} className="mt-5" />
 			</section>}
 
-			<ForYou />
+			<Suspense fallback={null}>
+				<ForYou />
+			</Suspense>
 
 			{popular.results.length > 0 && <section>
 				<SectionHeading

@@ -48,8 +48,8 @@ export async function loginAction(
 		return { error: `Too many attempts. Try again in ${limit.retryAfterSec}s.` };
 	}
 
-	const lockKey = `${ip}:${email}`;
-	const accountLimit = await checkRateLimit(`login-account:${lockKey}`, 5);
+	const lockKey = `login-account:${email}`;
+	const accountLimit = await checkRateLimit(lockKey, 5);
 	if (!accountLimit.ok) {
 		const mins = Math.ceil(accountLimit.retryAfterSec / 60);
 		return { error: `Account temporarily locked. Try again in ${mins} min.` };
@@ -57,11 +57,7 @@ export async function loginAction(
 
 	const result = await authenticate(email, password);
 	if ("error" in result) {
-		const failed = await rateLimit(
-			`login-account:${lockKey}`,
-			4,
-			15 * 60_000,
-		);
+		const failed = await rateLimit(lockKey, 4, 15 * 60_000);
 		if (!failed.ok) {
 			return { error: "Account temporarily locked. Try again in 15 min." };
 		}
@@ -73,7 +69,7 @@ export async function loginAction(
 		return { error: "This account has been suspended." };
 	}
 
-	await clearRateLimit(`login-account:${lockKey}`);
+	await clearRateLimit(lockKey);
 	await startSession(result.id);
 	redirect("/");
 }

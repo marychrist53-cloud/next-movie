@@ -36,7 +36,9 @@ Fill in `.env` before starting, then open <http://localhost:3000>.
   owner account. Public registration always creates regular users.
 - `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` — required for web
   push. Generate the key pair with `npx web-push generate-vapid-keys`.
+- `SESSION_SECRET` — HMAC key for session cookies. Required in production.
 - `DATABASE_PATH` — SQLite file location. Defaults to `./data/nextmovie.db`.
+- `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` — required on Vercel.
 
 Never commit `.env`.
 
@@ -98,8 +100,8 @@ IP. Set `NEXT_PUBLIC_SITE_URL` to the production URL. Vercel Cron calls
 
 ```bash
 npm run lint
+npm run typecheck
 npm test
-npx tsc --noEmit
 npm run build
 ```
 

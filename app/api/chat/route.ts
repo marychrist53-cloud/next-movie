@@ -1,10 +1,59 @@
 import { NextResponse } from "next/server";
 
-import { answerChat, type ChatMessage } from "@/lib/ai";
+import { answerChat, type ChatMessage, type ChatResponse } from "@/lib/ai";
 import { rateLimit } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request-ip";
 
 export const maxDuration = 60;
+
+function encodeSse(event: unknown) {
+	return `data: ${JSON.stringify(event)}\n\n`;
+}
+
+function chunkReply(reply: string): string[] {
+	const parts = reply.split(/(\s+)/);
+	const chunks: string[] = [];
+	let buffer = "";
+	for (const part of parts) {
+		buffer += part;
+		if (buffer.length >= 24) {
+			chunks.push(buffer);
+			buffer = "";
+		}
+	}
+	if (buffer) chunks.push(buffer);
+	return chunks;
+}
+
+function streamChat(response: ChatResponse) {
+	const encoder = new TextEncoder();
+	const stream = new ReadableStream({
+		start(controller) {
+			for (const text of chunkReply(response.reply)) {
+				controller.enqueue(encoder.encode(encodeSse({ type: "token", text })));
+			}
+			controller.enqueue(
+				encoder.encode(
+					encodeSse({
+						type: "done",
+						reply: response.reply,
+						results: response.results,
+						mode: response.mode,
+					}),
+				),
+			);
+			controller.close();
+		},
+	});
+
+	return new Response(stream, {
+		headers: {
+			"Content-Type": "text/event-stream; charset=utf-8",
+			"Cache-Control": "no-store",
+			Connection: "keep-alive",
+		},
+	});
+}
 
 export async function POST(request: Request) {
 	const contentLength = Number(request.headers.get("content-length") ?? 0);
@@ -81,10 +130,7 @@ export async function POST(request: Request) {
 	}
 
 	try {
-		const response = await answerChat(messages);
-		return NextResponse.json(response, {
-			headers: { "Cache-Control": "no-store" },
-		});
+		return streamChat(await answerChat(messages));
 	} catch (error) {
 		console.error("[chat] assistant failed", error);
 		return NextResponse.json(

@@ -5,6 +5,7 @@ process.env.DATABASE_PATH = path.join(
 	tmpdir(),
 	`next-movie-tests-${process.pid}-${Date.now()}.db`,
 );
+process.env.SESSION_SECRET = "test-session-secret";
 delete process.env.OWNER_EMAIL;
 delete process.env.OWNER_PASSWORD;
 delete process.env.GEMINI_API_KEY;

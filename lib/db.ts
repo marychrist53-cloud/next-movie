@@ -364,6 +364,10 @@ export async function deleteExpiredSessions() {
 	await db.prepare("DELETE FROM sessions WHERE expires_at <= datetime('now')").run();
 }
 
+export async function deleteSessionsForUser(userId: number) {
+	await db.prepare("DELETE FROM sessions WHERE user_id = ?").run(userId);
+}
+
 /* ------------------------- watchlist / favorites -------------------------- */
 
 async function libraryRows(table: string, userId: number){

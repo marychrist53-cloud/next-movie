@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Play, X } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
+import { useInert } from "@/components/use-inert";
 import { cn } from "@/lib/utils";
 
 export function VideoModal({
@@ -16,6 +18,8 @@ export function VideoModal({
 	onClose: () => void;
 }) {
 	const closeRef = useRef<HTMLButtonElement>(null);
+
+	useInert(true);
 
 	useEffect(() => {
 		const onKeyDown = (e: KeyboardEvent) => {
@@ -101,13 +105,15 @@ export default function TrailerButton({
 				Watch trailer
 			</button>
 
-			{open && (
-				<VideoModal
-					videoKey={videoKey}
-					title={`${title} — Trailer`}
-					onClose={close}
-				/>
-			)}
+			{open &&
+				createPortal(
+					<VideoModal
+						videoKey={videoKey}
+						title={`${title} — Trailer`}
+						onClose={close}
+					/>,
+					document.body,
+				)}
 		</>
 	);
 }

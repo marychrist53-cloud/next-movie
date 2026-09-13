@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Sparkles, X, SendHorizonal, Loader2, RotateCcw } from "lucide-react";
 
+import { useInert } from "@/components/use-inert";
 import { imageUrl } from "@/lib/tmdb";
 import { cn } from "@/lib/utils";
 
@@ -66,6 +67,7 @@ export default function AiChat() {
 	const triggerRef = useRef<HTMLButtonElement>(null);
 	const messagesRef = useRef(messages);
 	messagesRef.current = messages;
+	useInert(open);
 
 	useEffect(() => {
 		try {
@@ -134,7 +136,10 @@ export default function AiChat() {
 		inputRef.current?.focus();
 	}
 
-	async function requestReply(history: Message[]) {
+	async function requestReply(
+		history: Message[],
+		onToken: (text: string) => void,
+	) {
 		const res = await fetch("/api/chat", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
@@ -146,10 +151,45 @@ export default function AiChat() {
 			throw new Error(data.error ?? "I couldn't reply just now. Try again?");
 		}
 
-		return (await res.json()) as {
-			reply: string;
-			results?: ResultItem[];
-		};
+		const reader = res.body?.getReader();
+		if (!reader) {
+			throw new Error("I couldn't reply just now. Try again?");
+		}
+
+		const decoder = new TextDecoder();
+		let buffer = "";
+		let reply = "";
+		let results: ResultItem[] | undefined;
+
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			buffer += decoder.decode(value, { stream: true });
+			const parts = buffer.split("\n\n");
+			buffer = parts.pop() ?? "";
+			for (const part of parts) {
+				const line = part
+					.split("\n")
+					.find(entry => entry.startsWith("data: "));
+				if (!line) continue;
+				const event = JSON.parse(line.slice(6)) as {
+					type?: string;
+					text?: string;
+					reply?: string;
+					results?: ResultItem[];
+				};
+				if (event.type === "token" && typeof event.text === "string") {
+					reply += event.text;
+					onToken(event.text);
+				}
+				if (event.type === "done") {
+					if (typeof event.reply === "string") reply = event.reply;
+					results = event.results;
+				}
+			}
+		}
+
+		return { reply, results };
 	}
 
 	async function send(text: string, existingHistory?: Message[]) {
@@ -166,15 +206,49 @@ export default function AiChat() {
 		if (inputRef.current) inputRef.current.style.height = "40px";
 
 		try {
-			const data = await requestReply(history);
-			setMessages(prev => [
-				...prev.filter(message => !message.failed),
-				{
-					role: "assistant",
-					content: data.reply,
-					results: data.results,
-				},
-			]);
+			let started = false;
+			const data = await requestReply(history, text => {
+				if (!started) {
+					started = true;
+					setPending(false);
+					setMessages(prev => [
+						...prev.filter(message => !message.failed),
+						{ role: "assistant", content: text },
+					]);
+					return;
+				}
+				setMessages(prev => {
+					const next = [...prev];
+					const last = next[next.length - 1];
+					if (last?.role === "assistant") {
+						next[next.length - 1] = {
+							...last,
+							content: last.content + text,
+						};
+					}
+					return next;
+				});
+			});
+			setMessages(prev => {
+				const next = prev.filter(message => !message.failed);
+				const last = next[next.length - 1];
+				if (last?.role === "assistant") {
+					next[next.length - 1] = {
+						...last,
+						content: data.reply || last.content,
+						results: data.results,
+					};
+					return next;
+				}
+				return [
+					...next,
+					{
+						role: "assistant",
+						content: data.reply,
+						results: data.results,
+					},
+				];
+			});
 		} catch (err) {
 			setMessages(prev => [
 				...prev.filter(message => !message.failed),
@@ -267,6 +341,8 @@ export default function AiChat() {
 
 					<div
 						ref={scrollRef}
+						aria-live="polite"
+						aria-relevant="additions text"
 						className="flex-1 space-y-3 overflow-y-auto px-3.5 py-4">
 						{messages.map((message, index) => (
 							<div key={`${message.role}-${index}`}>

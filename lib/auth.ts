@@ -7,9 +7,13 @@ import {
 	createSession,
 	deleteExpiredSessions,
 	deleteSession,
+	deleteSessionsForUser,
 	findSessionUser,
 	findUserByEmail,
 } from "@/lib/db";
+import { hashSessionToken } from "@/lib/session-token";
+
+export { hashSessionToken } from "@/lib/session-token";
 
 const SESSION_COOKIE = "nm-session";
 const SESSION_DAYS = 30;
@@ -39,7 +43,8 @@ export async function startSession(userId: number) {
 		.replace("T", " ")
 		.slice(0, 19);
 
-	await createSession(token, userId, expires);
+	await deleteSessionsForUser(userId);
+	await createSession(hashSessionToken(token), userId, expires);
 	await deleteExpiredSessions();
 
 	const store = await cookies();
@@ -56,7 +61,7 @@ export async function endSession() {
 	const store = await cookies();
 	const token = store.get(SESSION_COOKIE)?.value;
 	if (token) {
-		await deleteSession(token);
+		await deleteSession(hashSessionToken(token));
 		store.delete(SESSION_COOKIE);
 	}
 }
@@ -67,7 +72,7 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
 	if (!token) return null;
 
 	try {
-		return (await findSessionUser(token)) ?? null;
+		return (await findSessionUser(hashSessionToken(token))) ?? null;
 	} catch {
 		return null;
 	}

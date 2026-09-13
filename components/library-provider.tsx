@@ -40,6 +40,11 @@ type LibraryContextValue = {
 	toggleFavorite: (item: LibraryItem) => void;
 	watchlistCount: number;
 	favoriteCount: number;
+	hydrateAccount: (input: {
+		user: SessionUser | null;
+		watchlistIds: string[];
+		favoriteIds: string[];
+	}) => void;
 };
 
 const LibraryContext = createContext<LibraryContextValue | null>(null);
@@ -108,7 +113,11 @@ function useLocalFavorites(): {
 	return { ids, isReady: true, toggle };
 }
 
-function useIdSet(initial: string[]): [Set<string>, (key: string) => void] {
+function useIdSet(initial: string[]): {
+	ids: Set<string>;
+	flip: (key: string) => void;
+	replace: (next: string[]) => void;
+} {
 	const [ids, setIds] = useState(() => new Set(initial));
 
 	const flip = useCallback((key: string) => {
@@ -120,7 +129,11 @@ function useIdSet(initial: string[]): [Set<string>, (key: string) => void] {
 		});
 	}, []);
 
-	return [ids, flip];
+	const replace = useCallback((next: string[]) => {
+		setIds(new Set(next));
+	}, []);
+
+	return { ids, flip, replace };
 }
 
 export function LibraryProvider({
@@ -137,14 +150,37 @@ export function LibraryProvider({
 	const localWatchlist = useLocalWatchlistItems();
 	const localFavorites = useLocalFavorites();
 
-	const [watchIds, flipWatch] = useIdSet(initialWatchlistIds);
-	const [favIds, flipFav] = useIdSet(initialFavoriteIds);
+	const [account, setAccount] = useState<SessionUser | null>(user);
+	const {
+		ids: watchIds,
+		flip: flipWatch,
+		replace: replaceWatch,
+	} = useIdSet(initialWatchlistIds);
+	const {
+		ids: favIds,
+		flip: flipFav,
+		replace: replaceFav,
+	} = useIdSet(initialFavoriteIds);
+
+	const hydrateAccount = useCallback(
+		(input: {
+			user: SessionUser | null;
+			watchlistIds: string[];
+			favoriteIds: string[];
+		}) => {
+			setAccount(input.user);
+			replaceWatch(input.watchlistIds);
+			replaceFav(input.favoriteIds);
+		},
+		[replaceFav, replaceWatch],
+	);
 
 	const value = useMemo<LibraryContextValue>(() => {
-		if (user) {
+		if (account) {
 			return {
-				user,
+				user: account,
 				isReady: true,
+				hydrateAccount,
 				watchlistHas: (mediaType, id) => watchIds.has(`${mediaType}-${id}`),
 				favoriteHas: (mediaType, id) => favIds.has(`${mediaType}-${id}`),
 				watchlistCount: watchIds.size,
@@ -183,6 +219,7 @@ export function LibraryProvider({
 		return {
 			user: null,
 			isReady: true,
+			hydrateAccount,
 			watchlistHas: (mediaType, id) =>
 				guestWatchIds.has(`${mediaType}-${id}`),
 			favoriteHas: (mediaType, id) =>
@@ -201,13 +238,14 @@ export function LibraryProvider({
 			toggleFavorite: localFavorites.toggle,
 		};
 	}, [
-		user,
-		watchIds,
+		account,
 		favIds,
-		flipWatch,
 		flipFav,
-		localWatchlist,
+		flipWatch,
+		hydrateAccount,
 		localFavorites,
+		localWatchlist,
+		watchIds,
 	]);
 
 	return (
