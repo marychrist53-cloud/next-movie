@@ -175,9 +175,10 @@ async function openDriver(): Promise<SqliteDriver> {
 	}
 
 	if (process.env.VERCEL) {
-		throw new Error(
-			"Vercel deployments require TURSO_DATABASE_URL and TURSO_AUTH_TOKEN. Local SQLite files do not persist on serverless.",
+		console.warn(
+			"[db] TURSO_DATABASE_URL is not set; using ephemeral /tmp SQLite. Accounts, sessions, and rate limits will not persist across instances.",
 		);
+		return createLocalDriver(path.join("/tmp", "nextmovie.db"));
 	}
 
 	const filePath =
