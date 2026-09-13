@@ -85,10 +85,14 @@ The command refuses to run when `NODE_ENV=production` unless
 
 ## Deployment
 
-SQLite requires one shared, persistent filesystem. Set `DATABASE_PATH` to a
-mounted persistent volume and avoid horizontally scaled instances that each
-have separate local disks. For multi-instance or serverless deployment, migrate
-the persistence layer to a shared database and distributed rate limiter.
+Local development uses `node:sqlite` at `DATABASE_PATH`. Vercel and any other
+serverless host must use Turso (`TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN`);
+the app refuses to boot on Vercel without them because a local SQLite file
+does not survive across invocations.
+
+Set `TRUST_PROXY_HEADERS=1` on Vercel so rate limits key on the real client
+IP. Set `NEXT_PUBLIC_SITE_URL` to the production URL. Vercel Cron calls
+`/api/cron/notifications` daily and sends `Authorization: Bearer $CRON_SECRET`.
 
 ## Checks
 

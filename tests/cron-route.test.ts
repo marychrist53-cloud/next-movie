@@ -18,7 +18,7 @@ const originalSecret = process.env.CRON_SECRET;
 describe("notification cron route", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		mockedUsers.mockReturnValue([]);
+		mockedUsers.mockResolvedValue([]);
 	});
 
 	afterEach(() => {
@@ -43,7 +43,7 @@ describe("notification cron route", () => {
 
 	it("refreshes subscribed users with a valid bearer token", async () => {
 		process.env.CRON_SECRET = "correct-secret";
-		mockedUsers.mockReturnValue([2, 4]);
+		mockedUsers.mockResolvedValue([2, 4]);
 		mockedRefresh.mockResolvedValue(undefined);
 
 		const response = await GET(

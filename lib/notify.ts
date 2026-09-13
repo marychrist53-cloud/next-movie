@@ -41,7 +41,7 @@ async function sendPushToUser(
 	userId: number,
 	payload: { title: string; body: string; url: string },
 ) {
-	const subs = getPushSubscriptions(userId);
+	const subs = await getPushSubscriptions(userId);
 	if (!subs.length) return;
 	let keys;
 	try {
@@ -68,7 +68,7 @@ async function sendPushToUser(
 				if (typeof err === "object" && err && "statusCode" in err) {
 					const status = (err as { statusCode: number }).statusCode;
 					if (status === 404 || status === 410) {
-						prunePushSubscription(sub.endpoint);
+						await prunePushSubscription(sub.endpoint);
 					} else {
 						console.error(
 							`[push] delivery failed with status ${status}`,
@@ -84,7 +84,7 @@ async function sendPushToUser(
 }
 
 export async function refreshNotificationsForUser(userId: number) {
-	const subs = getNotifySubs(userId);
+	const subs = await getNotifySubs(userId);
 
 	const results = await Promise.allSettled(
 		subs.map(async sub => {
@@ -95,7 +95,7 @@ export async function refreshNotificationsForUser(userId: number) {
 				]);
 
 				if (isPast(movie.release_date)) {
-					const isNew = upsertNotification({
+					const isNew = await upsertNotification({
 						userId,
 						mediaType: "movie",
 						mediaId: sub.media_id,
@@ -113,7 +113,7 @@ export async function refreshNotificationsForUser(userId: number) {
 					}
 				}
 				if (isPast(dates.digital)) {
-					const isNew = upsertNotification({
+					const isNew = await upsertNotification({
 						userId,
 						mediaType: "movie",
 						mediaId: sub.media_id,
@@ -134,7 +134,7 @@ export async function refreshNotificationsForUser(userId: number) {
 				const show = await fetchTv(String(sub.media_id));
 				const last = show.last_episode_to_air;
 				if (last && isPast(last.air_date)) {
-					const isNew = upsertNotification({
+					const isNew = await upsertNotification({
 						userId,
 						mediaType: "tv",
 						mediaId: sub.media_id,

@@ -55,12 +55,14 @@ export default async function RootLayout({
 		genres = [];
 	}
 
-	const watchlistIds = user ? getWatchlistIds(user.id) : [];
-	const favoriteIds = user ? getFavoriteIds(user.id) : [];
-	const unread = user ? getUnreadCount(user.id) : 0;
-	const staff = user ? ["admin", "owner"].includes(getUserRole(user.id)) : false;
-	const announcement = getSetting("announcement") ?? "";
-	const registrationsOpen = getSetting("registrations_open") !== "0";
+	const watchlistIds = user ? await getWatchlistIds(user.id) : [];
+	const favoriteIds = user ? await getFavoriteIds(user.id) : [];
+	const unread = user ? await getUnreadCount(user.id) : 0;
+	const staff = user
+		? ["admin", "owner"].includes(await getUserRole(user.id))
+		: false;
+	const announcement = (await getSetting("announcement")) ?? "";
+	const registrationsOpen = (await getSetting("registrations_open")) !== "0";
 
 	return (
 		<html

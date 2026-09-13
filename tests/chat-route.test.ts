@@ -20,7 +20,7 @@ const mockedRateLimit = vi.mocked(rateLimit);
 describe("chat route", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		mockedRateLimit.mockReturnValue({ ok: true, retryAfterSec: 0 });
+		mockedRateLimit.mockResolvedValue({ ok: true, retryAfterSec: 0 });
 		mockedAnswer.mockResolvedValue({ reply: "Hello", mode: "local" });
 	});
 
@@ -121,7 +121,7 @@ describe("chat route", () => {
 	});
 
 	it("returns retry timing when rate limited", async () => {
-		mockedRateLimit.mockReturnValue({ ok: false, retryAfterSec: 12 });
+		mockedRateLimit.mockResolvedValue({ ok: false, retryAfterSec: 12 });
 		const response = await POST(
 			new Request("http://localhost/api/chat", {
 				method: "POST",

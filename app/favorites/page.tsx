@@ -33,7 +33,7 @@ export default async function FavoritesPage() {
 		);
 	}
 
-	const movies: MovieType[] = getFavorites(user.id).map(item => ({
+	const movies: MovieType[] = (await getFavorites(user.id)).map(item => ({
 		id: item.media_id,
 		media_type: item.media_type as MovieType["media_type"],
 		title: item.title,

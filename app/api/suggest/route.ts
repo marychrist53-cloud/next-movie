@@ -14,7 +14,7 @@ export async function GET(request: Request) {
 	}
 
 	const ip = getClientIp(request.headers);
-	const limit = rateLimit(`suggest:${ip}`, 60, 60_000);
+	const limit = await rateLimit(`suggest:${ip}`, 60, 60_000);
 	if (!limit.ok) {
 		return NextResponse.json(
 			{ error: "Too many requests" },

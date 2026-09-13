@@ -44,7 +44,7 @@ export default async function NotificationsPage() {
 		);
 	}
 
-	const notifications = getNotifications(user.id);
+	const notifications = await getNotifications(user.id);
 	const unread = notifications.filter(n => !n.read_at).length;
 
 	return (

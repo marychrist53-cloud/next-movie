@@ -17,7 +17,7 @@ export type AdminState = { error?: string; ok?: boolean };
 
 async function requireOwnerRole() {
 	const actor = await requireUser();
-	const profile = getUserProfile(actor.id);
+	const profile = await getUserProfile(actor.id);
 	if (profile?.role !== "owner") return null;
 	return actor;
 }
@@ -27,13 +27,13 @@ export async function setUserRoleAction(
 	role: "admin" | "user",
 ): Promise<AdminState> {
 	const actor = await requireUser();
-	const actorProfile = getUserProfile(actor.id);
+	const actorProfile = await getUserProfile(actor.id);
 
 	if (actorProfile?.role !== "owner") {
 		return { error: "Only the owner can manage roles." };
 	}
 
-	const target = getUserProfile(targetUserId);
+	const target = await getUserProfile(targetUserId);
 	if (!target) return { error: "User not found." };
 
 	if (target.role === "owner") {
@@ -48,7 +48,7 @@ export async function setUserRoleAction(
 		return { error: "Invalid role." };
 	}
 
-	setUserRole(targetUserId, role);
+	await setUserRole(targetUserId, role);
 	revalidatePath("/admin");
 	return { ok: true };
 }
@@ -67,12 +67,12 @@ export async function setBannedAction(
 	const actor = await requireOwnerRole();
 	if (!actor) return { error: "Only the owner can manage bans." };
 
-	const target = getUserProfile(targetUserId);
+	const target = await getUserProfile(targetUserId);
 	if (!target) return { error: "User not found." };
 	if (target.role === "owner") return { error: "The owner cannot be banned." };
 	if (targetUserId === actor.id) return { error: "You cannot ban yourself." };
 
-	setBanned(targetUserId, banned);
+	await setBanned(targetUserId, banned);
 	revalidatePath("/admin");
 	return { ok: true };
 }
@@ -88,7 +88,7 @@ export async function setRegistrationsAction(open: boolean): Promise<AdminState>
 	const actor = await requireOwnerRole();
 	if (!actor) return { error: "Only the owner can change settings." };
 
-	setSetting("registrations_open", open ? "1" : "0");
+	await setSetting("registrations_open", open ? "1" : "0");
 	revalidatePath("/admin");
 	revalidatePath("/register");
 	return { ok: true };
@@ -106,23 +106,23 @@ export async function setAnnouncementAction(
 	if (!actor) return { error: "Only the owner can change settings." };
 
 	const text = String(formData.get("announcement") ?? "").trim();
-	setSetting("announcement", text.slice(0, 300));
+	await setSetting("announcement", text.slice(0, 300));
 	revalidatePath("/", "layout");
 	return { ok: true };
 }
 
 export async function refreshAllNotificationsFormAction(): Promise<void> {
 	const actor = await requireUser();
-	const profile = getUserProfile(actor.id);
+	const profile = await getUserProfile(actor.id);
 	if (profile?.role !== "owner" && profile?.role !== "admin") return;
-	const limit = rateLimit(
+	const limit = await rateLimit(
 		"admin-notification-refresh",
 		1,
 		5 * 60_000,
 	);
 	if (!limit.ok) return;
 
-	const userIds = getAllNotifySubUsers();
+	const userIds = await getAllNotifySubUsers();
 	for (let index = 0; index < userIds.length; index += 5) {
 		const batch = userIds.slice(index, index + 5);
 		const results = await Promise.allSettled(

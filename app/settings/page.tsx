@@ -12,7 +12,7 @@ export default async function SettingsPage() {
 	const user = await getCurrentUser();
 	if (!user) redirect("/login");
 
-	const profile = getUserProfile(user.id)!;
+	const profile = (await getUserProfile(user.id))!;
 
 	return (
 		<div className="mx-auto max-w-lg space-y-6">

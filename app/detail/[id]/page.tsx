@@ -249,8 +249,10 @@ export default async function MovieDetail({ params }: Props) {
 
 	const trailer = videos[0] ?? null;
 	const user = await getCurrentUser();
-	const userRating = user ? getRating(user.id, "movie", movie.id) : null;
-	const subscribed = user ? isSubscribed(user.id, "movie", movie.id) : false;
+	const userRating = user ? await getRating(user.id, "movie", movie.id) : null;
+	const subscribed = user
+		? await isSubscribed(user.id, "movie", movie.id)
+		: false;
 	const region = (await cookies()).get("nm-region")?.value ?? "US";
 
 	const { providers, link } = await fetchWatchProviders(

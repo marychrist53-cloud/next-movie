@@ -48,10 +48,10 @@ function revalidateMedia(mediaType: string, mediaId: number) {
 export async function toggleWatchlistAction(item: LibraryItemInput): Promise<ActionState> {
 	const user = await requireUser();
 	if (!isValidLibraryItem(item)) return { error: "Invalid title data." };
-	if (isWatchlisted(user.id, item.media_type, item.media_id)) {
-		removeWatchlist(user.id, item.media_type, item.media_id);
+	if (await isWatchlisted(user.id, item.media_type, item.media_id)) {
+		await removeWatchlist(user.id, item.media_type, item.media_id);
 	} else {
-		addWatchlist(user.id, item);
+		await addWatchlist(user.id, item);
 	}
 	revalidateMedia(item.media_type, item.media_id);
 	return { ok: true };
@@ -60,10 +60,10 @@ export async function toggleWatchlistAction(item: LibraryItemInput): Promise<Act
 export async function toggleFavoriteAction(item: LibraryItemInput): Promise<ActionState> {
 	const user = await requireUser();
 	if (!isValidLibraryItem(item)) return { error: "Invalid title data." };
-	if (isFavorite(user.id, item.media_type, item.media_id)) {
-		removeFavorite(user.id, item.media_type, item.media_id);
+	if (await isFavorite(user.id, item.media_type, item.media_id)) {
+		await removeFavorite(user.id, item.media_type, item.media_id);
 	} else {
-		addFavorite(user.id, item);
+		await addFavorite(user.id, item);
 	}
 	revalidateMedia(item.media_type, item.media_id);
 	return { ok: true };
@@ -79,12 +79,12 @@ export async function setRatingAction(
 		return { error: "Invalid title." };
 	}
 	if (rating === null) {
-		deleteRating(user.id, mediaType, mediaId);
+		await deleteRating(user.id, mediaType, mediaId);
 	} else {
 		if (!Number.isInteger(rating) || rating < 1 || rating > 10) {
 			return { error: "Rating must be between 1 and 10." };
 		}
-		setRating(user.id, mediaType, mediaId, rating);
+		await setRating(user.id, mediaType, mediaId, rating);
 	}
 	revalidateMedia(mediaType, mediaId);
 	return { ok: true };
@@ -101,7 +101,7 @@ export async function addCommentAction(
 		return { error: "Invalid title." };
 	}
 
-	const limit = rateLimit(`comment:${user.id}`, 10, 60_000);
+	const limit = await rateLimit(`comment:${user.id}`, 10, 60_000);
 	if (!limit.ok) {
 		return { error: `Slow down — try again in ${limit.retryAfterSec}s.` };
 	}
@@ -113,7 +113,7 @@ export async function addCommentAction(
 		if (!Number.isInteger(parentId) || parentId <= 0) {
 			return { error: "Invalid reply target." };
 		}
-		const parent = getCommentContext(parentId);
+		const parent = await getCommentContext(parentId);
 		if (
 			!parent ||
 			parent.media_type !== mediaType ||
@@ -123,7 +123,7 @@ export async function addCommentAction(
 		}
 	}
 
-	addComment(user.id, mediaType, mediaId, trimmed, parentId);
+	await addComment(user.id, mediaType, mediaId, trimmed, parentId);
 	revalidateMedia(mediaType, mediaId);
 	return { ok: true };
 }
@@ -133,22 +133,22 @@ export async function toggleCommentLikeAction(commentId: number): Promise<Action
 	if (!Number.isInteger(commentId) || commentId <= 0) {
 		return { error: "Comment not found." };
 	}
-	const comment = getCommentContext(commentId);
+	const comment = await getCommentContext(commentId);
 	if (!comment) return { error: "Comment not found." };
-	toggleCommentLike(commentId, user.id);
+	await toggleCommentLike(commentId, user.id);
 	revalidateMedia(comment.media_type, comment.media_id);
 	return { ok: true };
 }
 
 export async function adminDeleteCommentAction(commentId: number): Promise<ActionState> {
 	const user = await requireUser();
-	const role = getUserProfile(user.id)?.role;
+	const role = (await getUserProfile(user.id))?.role;
 	if (role !== "admin" && role !== "owner") {
 		return { error: "Admins only." };
 	}
-	const comment = getCommentContext(commentId);
+	const comment = await getCommentContext(commentId);
 	if (!comment) return { error: "Comment not found." };
-	adminDeleteComment(commentId);
+	await adminDeleteComment(commentId);
 	revalidatePath("/admin");
 	revalidateMedia(comment.media_type, comment.media_id);
 	return { ok: true };
@@ -177,12 +177,12 @@ export async function deleteCommentAction(
 	mediaId: number,
 ): Promise<ActionState> {
 	const user = await requireUser();
-	const comment = getCommentContext(commentId);
+	const comment = await getCommentContext(commentId);
 	if (!comment) return { error: "Comment not found." };
 	if (comment.media_type !== mediaType || comment.media_id !== mediaId) {
 		return { error: "Comment does not belong to this title." };
 	}
-	deleteComment(user.id, commentId);
+	await deleteComment(user.id, commentId);
 	revalidateMedia(comment.media_type, comment.media_id);
 	return { ok: true };
 }
@@ -203,10 +203,10 @@ export async function toggleNotifyAction(
 	) {
 		return { error: "Invalid notification subscription." };
 	}
-	if (isSubscribed(user.id, mediaType, mediaId)) {
-		removeNotifySub(user.id, mediaType, mediaId);
+	if (await isSubscribed(user.id, mediaType, mediaId)) {
+		await removeNotifySub(user.id, mediaType, mediaId);
 	} else {
-		addNotifySub(user.id, mediaType, mediaId, title);
+		await addNotifySub(user.id, mediaType, mediaId, title);
 	}
 	revalidateMedia(mediaType, mediaId);
 	return { ok: true };
@@ -214,7 +214,7 @@ export async function toggleNotifyAction(
 
 export async function markNotificationsReadAction(): Promise<ActionState> {
 	const user = await requireUser();
-	markAllNotificationsRead(user.id);
+	await markAllNotificationsRead(user.id);
 	revalidatePath("/notifications");
 	revalidatePath("/", "layout");
 	return { ok: true };
@@ -222,7 +222,7 @@ export async function markNotificationsReadAction(): Promise<ActionState> {
 
 export async function refreshNotificationsAction(): Promise<ActionState> {
 	const user = await requireUser();
-	const limit = rateLimit(`notification-refresh:${user.id}`, 2, 5 * 60_000);
+	const limit = await rateLimit(`notification-refresh:${user.id}`, 2, 5 * 60_000);
 	if (!limit.ok) {
 		return {
 			error: `Notifications were checked recently — try again in ${limit.retryAfterSec}s.`,
@@ -284,12 +284,12 @@ export async function importLocalDataAction(
 	}
 
 	for (const item of validWatchlist) {
-		addWatchlist(user.id, item);
+		await addWatchlist(user.id, item);
 	}
 	for (const item of validFavorites) {
-		addFavorite(user.id, item);
+		await addFavorite(user.id, item);
 	}
-	importRatings(user.id, validRatings);
+	await importRatings(user.id, validRatings);
 
 	revalidatePath("/", "layout");
 	return { ok: true };

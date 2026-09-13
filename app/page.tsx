@@ -116,7 +116,7 @@ async function ForYou() {
 	const user = await getCurrentUser();
 	if (!user) return null;
 
-	const watchlist = getWatchlist(user.id);
+	const watchlist = await getWatchlist(user.id);
 	if (!watchlist.length) return null;
 
 	const seed = watchlist[0];

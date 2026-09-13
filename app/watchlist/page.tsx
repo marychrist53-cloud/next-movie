@@ -14,7 +14,7 @@ export default async function WatchlistPage() {
 
 	let dbMovies: MovieType[] = [];
 	if (user) {
-		dbMovies = getWatchlist(user.id).map(item => ({
+		dbMovies = (await getWatchlist(user.id)).map(item => ({
 			id: item.media_id,
 			media_type: item.media_type as MovieType["media_type"],
 			title: item.title,

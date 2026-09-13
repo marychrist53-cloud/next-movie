@@ -39,8 +39,8 @@ export async function startSession(userId: number) {
 		.replace("T", " ")
 		.slice(0, 19);
 
-	createSession(token, userId, expires);
-	deleteExpiredSessions();
+	await createSession(token, userId, expires);
+	await deleteExpiredSessions();
 
 	const store = await cookies();
 	store.set(SESSION_COOKIE, token, {
@@ -56,7 +56,7 @@ export async function endSession() {
 	const store = await cookies();
 	const token = store.get(SESSION_COOKIE)?.value;
 	if (token) {
-		deleteSession(token);
+		await deleteSession(token);
 		store.delete(SESSION_COOKIE);
 	}
 }
@@ -67,7 +67,7 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
 	if (!token) return null;
 
 	try {
-		return findSessionUser(token) ?? null;
+		return (await findSessionUser(token)) ?? null;
 	} catch {
 		return null;
 	}
@@ -91,7 +91,7 @@ export async function authenticate(
 	email: string,
 	password: string,
 ): Promise<{ id: number } | { error: string }> {
-	const user = findUserByEmail(email);
+	const user = await findUserByEmail(email);
 	if (!user || !verifyPassword(password, user.password_hash)) {
 		return { error: "Invalid email or password." };
 	}

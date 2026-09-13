@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 
+export const maxDuration = 60;
+
 import { getAllNotifySubUsers } from "@/lib/db";
 import { refreshNotificationsForUser } from "@/lib/notify";
 
@@ -33,7 +35,7 @@ export async function GET(request: Request) {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 	}
 
-	const userIds = getAllNotifySubUsers();
+	const userIds = await getAllNotifySubUsers();
 	let checked = 0;
 	let failed = 0;
 

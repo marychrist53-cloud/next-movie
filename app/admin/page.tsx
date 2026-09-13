@@ -57,7 +57,7 @@ export default async function AdminPage({ searchParams }: Props) {
 	const user = await getCurrentUser();
 	if (!user) redirect("/login");
 
-	const role = getUserRole(user.id);
+	const role = await getUserRole(user.id);
 	if (role !== "admin" && role !== "owner") {
 		return (
 			<div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 rounded-2xl border border-dashed p-8 text-center">
@@ -125,10 +125,10 @@ export default async function AdminPage({ searchParams }: Props) {
 	);
 }
 
-function OverviewTab() {
-	const stats = getSiteStats();
-	const registrationsOpen = getSetting("registrations_open") !== "0";
-	const announcement = getSetting("announcement") ?? "";
+async function OverviewTab() {
+	const stats = await getSiteStats();
+	const registrationsOpen = (await getSetting("registrations_open")) !== "0";
+	const announcement = (await getSetting("announcement")) ?? "";
 
 	return (
 		<div className="space-y-6">
@@ -179,14 +179,14 @@ function OverviewTab() {
 	);
 }
 
-function UsersTab({ currentUserId }: { currentUserId: number }) {
-	const users = getAllUsers();
+async function UsersTab({ currentUserId }: { currentUserId: number }) {
+	const users = await getAllUsers();
 
 	return (
 		<div className="overflow-hidden rounded-2xl border border-border/60">
 			{users.map(u => {
 				const isSelf = u.id === currentUserId;
-				const targetRole = getUserRole(u.id);
+				const targetRole = u.role;
 				const isTargetOwner = targetRole === "owner";
 				const banned = !!u.banned;
 
@@ -275,8 +275,8 @@ function UsersTab({ currentUserId }: { currentUserId: number }) {
 	);
 }
 
-function ModerationTab() {
-	const recent = getAllComments(50);
+async function ModerationTab() {
+	const recent = await getAllComments(50);
 
 	return (
 		<section>
@@ -315,9 +315,9 @@ function ModerationTab() {
 	);
 }
 
-function SettingsTab() {
-	const registrationsOpen = getSetting("registrations_open") !== "0";
-	const announcement = getSetting("announcement") ?? "";
+async function SettingsTab() {
+	const registrationsOpen = (await getSetting("registrations_open")) !== "0";
+	const announcement = (await getSetting("announcement")) ?? "";
 
 	return (
 		<div className="space-y-6 sm:max-w-xl">

@@ -52,7 +52,7 @@ const item = {
 describe("library actions", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		vi.mocked(rateLimit).mockReturnValue({ ok: true, retryAfterSec: 0 });
+		vi.mocked(rateLimit).mockResolvedValue({ ok: true, retryAfterSec: 0 });
 	});
 
 	it("imports guest watchlist, ratings, and favorites", async () => {
@@ -66,7 +66,7 @@ describe("library actions", () => {
 	});
 
 	it("rate limits manual notification refreshes", async () => {
-		vi.mocked(rateLimit).mockReturnValue({ ok: false, retryAfterSec: 30 });
+		vi.mocked(rateLimit).mockResolvedValue({ ok: false, retryAfterSec: 30 });
 
 		const result = await refreshNotificationsAction();
 

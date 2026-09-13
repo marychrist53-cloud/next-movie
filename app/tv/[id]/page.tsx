@@ -103,8 +103,8 @@ export default async function TvDetail({ params }: Props) {
 	);
 
 	const user = await getCurrentUser();
-	const userRating = user ? getRating(user.id, "tv", show.id) : null;
-	const subscribed = user ? isSubscribed(user.id, "tv", show.id) : false;
+	const userRating = user ? await getRating(user.id, "tv", show.id) : null;
+	const subscribed = user ? await isSubscribed(user.id, "tv", show.id) : false;
 
 	const nextEp = show.next_episode_to_air;
 	const lastEp = show.last_episode_to_air;

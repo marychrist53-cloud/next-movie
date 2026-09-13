@@ -24,7 +24,7 @@ export async function POST(request: Request) {
 			return NextResponse.json({ error: "Subscription is too large" }, { status: 400 });
 		}
 
-		const result = addPushSubscription(
+		const result = await addPushSubscription(
 			user.id,
 			body.endpoint,
 			body.keys.p256dh,
@@ -51,7 +51,7 @@ export async function DELETE(request: Request) {
 		if (!body.endpoint || body.endpoint.length > 2048) {
 			return NextResponse.json({ error: "Invalid subscription" }, { status: 400 });
 		}
-		removePushSubscription(user.id, body.endpoint);
+		await removePushSubscription(user.id, body.endpoint);
 		return NextResponse.json({ ok: true });
 	} catch {
 		return NextResponse.json({ error: "Bad request" }, { status: 400 });

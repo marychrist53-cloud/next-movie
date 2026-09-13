@@ -27,11 +27,11 @@ export default async function CommentSection({
 		getCurrentUser(),
 	]);
 
-	const likeData = getCommentLikes(
+	const likeData = await getCommentLikes(
 		comments.map(c => c.id),
 		user?.id ?? null,
 	);
-	const replies = getReplies(comments.map(c => c.id));
+	const replies = await getReplies(comments.map(c => c.id));
 	const total =
 		comments.length +
 		[...replies.values()].reduce((sum, list) => sum + list.length, 0);

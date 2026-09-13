@@ -43,13 +43,13 @@ export async function loginAction(
 	}
 
 	const ip = await clientKey();
-	const limit = rateLimit(`login:${ip}`, 10, 60_000);
+	const limit = await rateLimit(`login:${ip}`, 10, 60_000);
 	if (!limit.ok) {
 		return { error: `Too many attempts. Try again in ${limit.retryAfterSec}s.` };
 	}
 
 	const lockKey = `${ip}:${email}`;
-	const accountLimit = checkRateLimit(`login-account:${lockKey}`, 5);
+	const accountLimit = await checkRateLimit(`login-account:${lockKey}`, 5);
 	if (!accountLimit.ok) {
 		const mins = Math.ceil(accountLimit.retryAfterSec / 60);
 		return { error: `Account temporarily locked. Try again in ${mins} min.` };
@@ -57,7 +57,7 @@ export async function loginAction(
 
 	const result = await authenticate(email, password);
 	if ("error" in result) {
-		const failed = rateLimit(
+		const failed = await rateLimit(
 			`login-account:${lockKey}`,
 			4,
 			15 * 60_000,
@@ -68,12 +68,12 @@ export async function loginAction(
 		return { error: result.error };
 	}
 
-	const account = findUserByEmail(email);
+	const account = await findUserByEmail(email);
 	if (account?.banned) {
 		return { error: "This account has been suspended." };
 	}
 
-	clearRateLimit(`login-account:${lockKey}`);
+	await clearRateLimit(`login-account:${lockKey}`);
 	await startSession(result.id);
 	redirect("/");
 }
@@ -83,7 +83,7 @@ export async function registerAction(
 	formData: FormData,
 ): Promise<AuthState> {
 	const ip = await clientKey();
-	const limit = rateLimit(`register:${ip}`, 3, 10 * 60_000);
+	const limit = await rateLimit(`register:${ip}`, 3, 10 * 60_000);
 	if (!limit.ok) {
 		return { error: `Too many signups. Try again in ${Math.ceil(limit.retryAfterSec / 60)} min.` };
 	}
@@ -92,7 +92,7 @@ export async function registerAction(
 	const email = String(formData.get("email") ?? "").trim().toLowerCase();
 	const password = String(formData.get("password") ?? "");
 
-	if (getSetting("registrations_open") === "0") {
+	if ((await getSetting("registrations_open")) === "0") {
 		return { error: "Registrations are currently closed." };
 	}
 
@@ -112,11 +112,11 @@ export async function registerAction(
 	if (password.length > 128) {
 		return { error: "Password must be at most 128 characters." };
 	}
-	if (findUserByEmail(email)) {
+	if (await findUserByEmail(email)) {
 		return { error: "An account with this email already exists." };
 	}
 
-	const result = createUser(name, email, hashPassword(password));
+	const result = await createUser(name, email, hashPassword(password));
 	const userId = Number(result.lastInsertRowid);
 
 	await startSession(userId);
@@ -142,6 +142,6 @@ export async function updateProfileAction(
 		return { error: "Name must be 2-60 characters." };
 	}
 
-	updateProfile(user.id, name, bio);
+	await updateProfile(user.id, name, bio);
 	redirect(`/users/${user.id}`);
 }

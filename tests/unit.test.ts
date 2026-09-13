@@ -36,17 +36,17 @@ describe("youtubeThumb", () => {
 });
 
 describe("rateLimit", () => {
-	it("allows under the limit and blocks over it", () => {
+	it("allows under the limit and blocks over it", async () => {
 		const key = `test-${Math.random()}`;
 		for (let i = 0; i < 3; i++) {
-			expect(rateLimit(key, 3, 1000).ok).toBe(true);
+			expect((await rateLimit(key, 3, 1000)).ok).toBe(true);
 		}
-		const blocked = rateLimit(key, 3, 1000);
+		const blocked = await rateLimit(key, 3, 1000);
 		expect(blocked.ok).toBe(false);
 		expect(blocked.retryAfterSec).toBeGreaterThan(0);
 	});
-	it("separates keys", () => {
-		expect(rateLimit("a-1", 1, 1000).ok).toBe(true);
-		expect(rateLimit("a-2", 1, 1000).ok).toBe(true);
+	it("separates keys", async () => {
+		expect((await rateLimit("a-1", 1, 1000)).ok).toBe(true);
+		expect((await rateLimit("a-2", 1, 1000)).ok).toBe(true);
 	});
 });

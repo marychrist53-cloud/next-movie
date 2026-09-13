@@ -4,6 +4,8 @@ import { answerChat, type ChatMessage } from "@/lib/ai";
 import { rateLimit } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request-ip";
 
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
 	const contentLength = Number(request.headers.get("content-length") ?? 0);
 	if (contentLength > 32_000) {
@@ -12,7 +14,7 @@ export async function POST(request: Request) {
 
 	const ip = getClientIp(request.headers);
 
-	const limit = rateLimit(`chat:${ip}`, 20, 60_000);
+	const limit = await rateLimit(`chat:${ip}`, 20, 60_000);
 	if (!limit.ok) {
 		return NextResponse.json(
 			{ error: `Rate limit reached — try again in ${limit.retryAfterSec}s.` },

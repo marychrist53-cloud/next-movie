@@ -15,7 +15,7 @@ type Props = { params: Promise<{ id: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
 	const { id } = await params;
-	const profile = getUserProfile(Number(id));
+	const profile = await getUserProfile(Number(id));
 	if (!profile) return { title: "Profile" };
 	return {
 		title: `${profile.name} — Profile`,
@@ -30,7 +30,7 @@ export default async function UserProfilePage({ params }: Props) {
 	const userId = Number(id);
 	if (!Number.isInteger(userId) || userId <= 0) notFound();
 
-	const profile = getUserProfile(userId);
+	const profile = await getUserProfile(userId);
 	if (!profile) notFound();
 
 	const toMovie = (item: {
@@ -51,9 +51,9 @@ export default async function UserProfilePage({ params }: Props) {
 		overview: "",
 	});
 
-	const watchlist = getWatchlist(userId).map(toMovie);
-	const favorites = getFavorites(userId).map(toMovie);
-	const ratingsCount = countRatingsForUser(userId);
+	const watchlist = (await getWatchlist(userId)).map(toMovie);
+	const favorites = (await getFavorites(userId)).map(toMovie);
+	const ratingsCount = await countRatingsForUser(userId);
 
 	return (
 		<div className="space-y-10">

@@ -5,13 +5,13 @@ import {
 	pruneExpiredRateLimits,
 } from "@/lib/db";
 
-export function rateLimit(
+export async function rateLimit(
 	key: string,
 	limit: number,
 	windowMs: number,
-): { ok: boolean; retryAfterSec: number } {
-	periodicallyPruneRateLimits();
-	const bucket = consumeRateLimit(key, windowMs);
+): Promise<{ ok: boolean; retryAfterSec: number }> {
+	await periodicallyPruneRateLimits();
+	const bucket = await consumeRateLimit(key, windowMs);
 	const ok = !bucket || bucket.count <= limit;
 	return {
 		ok,
@@ -21,11 +21,11 @@ export function rateLimit(
 	};
 }
 
-export function checkRateLimit(
+export async function checkRateLimit(
 	key: string,
 	limit: number,
-): { ok: boolean; retryAfterSec: number } {
-	const bucket = getRateLimitBucket(key);
+): Promise<{ ok: boolean; retryAfterSec: number }> {
+	const bucket = await getRateLimitBucket(key);
 	if (!bucket || bucket.count < limit) {
 		return { ok: true, retryAfterSec: 0 };
 	}
@@ -41,7 +41,7 @@ export function checkRateLimit(
 export { clearRateLimit };
 
 let callsSincePrune = 0;
-export function periodicallyPruneRateLimits() {
+export async function periodicallyPruneRateLimits() {
 	callsSincePrune += 1;
-	if (callsSincePrune % 100 === 0) pruneExpiredRateLimits();
+	if (callsSincePrune % 100 === 0) await pruneExpiredRateLimits();
 }

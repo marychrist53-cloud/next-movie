@@ -58,7 +58,7 @@ describe("push subscription route", () => {
 
 	it("rejects an endpoint already owned by another account", async () => {
 		mockedUser.mockResolvedValue({ id: 7, name: "Mary", email: "mary@example.com" });
-		mockedAdd.mockReturnValue({ changes: 0, lastInsertRowid: 0 });
+		mockedAdd.mockResolvedValue({ changes: 0, lastInsertRowid: 0 });
 		const response = await POST(
 			request("POST", {
 				endpoint: "https://push.test/1",
