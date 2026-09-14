@@ -530,6 +530,25 @@ async function localAgent(messages: ChatMessage[]): Promise<ChatResponse> {
 	}
 }
 
+function withDeadline<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	return new Promise<T>((resolve, reject) => {
+		timer = setTimeout(() => {
+			reject(new Error(`${label} timed out after ${ms}ms`));
+		}, ms);
+		promise.then(
+			value => {
+				if (timer) clearTimeout(timer);
+				resolve(value);
+			},
+			error => {
+				if (timer) clearTimeout(timer);
+				reject(error);
+			},
+		);
+	});
+}
+
 /* --------------------------------- entry ----------------------------------- */
 
 async function resolveOfficialTitles(
@@ -594,41 +613,52 @@ async function liveCatalogHint(text: string): Promise<ChatResultItem[]> {
 
 export async function answerChat(
 	messages: ChatMessage[],
-	options?: { onToken?: (text: string) => void },
+	options?: { onToken?: (text: string) => void; llmTimeoutMs?: number },
 ): Promise<ChatResponse> {
 	const trimmed = messages.slice(-12);
 	const lastUser = [...trimmed].reverse().find(message => message.role === "user");
 	const previous = lastAssistantResults(trimmed.slice(0, -1));
 	const llm = getChatLlm();
-	const onToken = options?.onToken;
 	const skipLlm =
 		!!lastUser &&
 		looksLikeSmalltalk(lastUser.content) &&
 		!CATALOG_INTENT.test(lastUser.content.toLowerCase());
 
 	if (llm && lastUser && !skipLlm) {
+		let cancelled = false;
+		const onToken = (text: string) => {
+			if (cancelled || !text) return;
+			options?.onToken?.(text);
+		};
 		try {
-			const live = await liveCatalogHint(lastUser.content);
-			const draft =
-				llm.kind === "openai"
-					? await streamOpenAIDraft({
-							apiKey: llm.apiKey,
-							baseUrl: llm.baseUrl,
-							model: llm.model,
-							messages: trimmed,
-							previous,
-							live,
-							onToken,
-						})
-					: await generateGeminiDraft({
-							apiKey: llm.apiKey,
-							model: llm.model,
-							fallbackModel: llm.fallbackModel,
-							messages: trimmed,
-							previous,
-							live,
-							onToken,
-						});
+			const { draft, live } = await withDeadline(
+				(async () => {
+					const live = await liveCatalogHint(lastUser.content);
+					const draft =
+						llm.kind === "openai"
+							? await streamOpenAIDraft({
+									apiKey: llm.apiKey,
+									baseUrl: llm.baseUrl,
+									model: llm.model,
+									messages: trimmed,
+									previous,
+									live,
+									onToken,
+								})
+							: await generateGeminiDraft({
+									apiKey: llm.apiKey,
+									model: llm.model,
+									fallbackModel: llm.fallbackModel,
+									messages: trimmed,
+									previous,
+									live,
+									onToken,
+								});
+					return { draft, live };
+				})(),
+				options?.llmTimeoutMs ?? AI_BUDGET_MS,
+				"movie model",
+			);
 			const results = await resolveOfficialTitles(draft.titles, [
 				...previous,
 				...live,
@@ -639,6 +669,7 @@ export async function answerChat(
 				mode: "ai",
 			};
 		} catch (error) {
+			cancelled = true;
 			console.error("[chat] AI movie expert failed, using local assistant", error);
 		}
 	}
@@ -649,7 +680,7 @@ export async function answerChat(
 const GEMINI_OPENAI_BASE =
 	"https://generativelanguage.googleapis.com/v1beta/openai";
 
-const AI_BUDGET_MS = 25_000;
+const AI_BUDGET_MS = 12_000;
 
 function remainingMs(started: number, budget = AI_BUDGET_MS) {
 	return Math.max(1_000, budget - (Date.now() - started));

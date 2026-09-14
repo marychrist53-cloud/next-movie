@@ -312,6 +312,27 @@ describe("local chat routing", () => {
 		expect(fetchMediaList).not.toHaveBeenCalled();
 	});
 
+	it("falls back to the local assistant when the movie model hangs", async () => {
+		process.env.AI_API_KEY = "sk-test-key";
+		process.env.AI_BASE_URL = "https://api.openai.com/v1";
+		vi.mocked(generateOpenAIStream).mockImplementation(() => new Promise(() => {}));
+		vi.mocked(fetchSearchMulti).mockResolvedValue({
+			page: 1,
+			total_pages: 1,
+			total_results: 1,
+			results: [{ ...movie, id: 27205, title: "Inception" }],
+		});
+
+		const response = await answerChat(
+			[{ role: "user", content: "Who directed Inception?" }],
+			{ llmTimeoutMs: 40 },
+		);
+
+		expect(generateOpenAIStream).toHaveBeenCalled();
+		expect(response.mode).toBe("local");
+		expect(response.results?.[0].title).toBe("Inception");
+	});
+
 	it("does not wait on the movie model for a greeting", async () => {
 		process.env.AI_API_KEY = "sk-test-key";
 		process.env.AI_BASE_URL = "https://api.openai.com/v1";
