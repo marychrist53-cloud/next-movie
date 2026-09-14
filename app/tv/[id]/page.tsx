@@ -13,6 +13,7 @@ import TrailerButton from "@/components/trailer-button";
 import VideoGrid from "@/components/video-grid";
 import WatchProviders from "@/components/watch-providers";
 import SectionHeading from "@/components/section-heading";
+import { siteUrl } from "@/lib/site";
 import {
 	fetchCast,
 	fetchSimilar,
@@ -122,7 +123,7 @@ export default async function TvDetail({ params }: Props) {
 		image: imageUrl(show.poster_path, "w780") ?? undefined,
 		datePublished: show.first_air_date ?? undefined,
 		numberOfSeasons: show.number_of_seasons,
-		url: `/tv/${show.id}`,
+		url: `${siteUrl()}/tv/${show.id}`,
 		...(show.vote_average > 0 && {
 			aggregateRating: {
 				"@type": "AggregateRating",

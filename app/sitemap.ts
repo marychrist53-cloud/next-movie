@@ -8,8 +8,9 @@ import {
 	MOVIE_CATEGORIES,
 	TV_CATEGORIES,
 } from "@/lib/tmdb";
+import { siteUrl } from "@/lib/site";
 
-const BASE = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+const BASE = siteUrl();
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 	const staticRoutes = [

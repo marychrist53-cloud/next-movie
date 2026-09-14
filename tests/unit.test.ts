@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
+import robots from "@/app/robots";
 import { imageUrl, year, youtubeThumb } from "@/lib/tmdb";
 import { rateLimit } from "@/lib/rate-limit";
+import { siteUrl } from "@/lib/site";
 
 describe("year", () => {
 	it("extracts the year from a date", () => {
@@ -48,5 +50,33 @@ describe("rateLimit", () => {
 	it("separates keys", async () => {
 		expect((await rateLimit("a-1", 1, 1000)).ok).toBe(true);
 		expect((await rateLimit("a-2", 1, 1000)).ok).toBe(true);
+	});
+});
+
+describe("siteUrl", () => {
+	it("strips a trailing slash from the public site URL", () => {
+		const previous = process.env.NEXT_PUBLIC_SITE_URL;
+		process.env.NEXT_PUBLIC_SITE_URL = "https://next-movie-orpin.vercel.app/";
+		expect(siteUrl()).toBe("https://next-movie-orpin.vercel.app");
+		if (previous === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
+		else process.env.NEXT_PUBLIC_SITE_URL = previous;
+	});
+});
+
+describe("robots", () => {
+	it("points crawlers at the sitemap and keeps private library routes out", () => {
+		const previous = process.env.NEXT_PUBLIC_SITE_URL;
+		process.env.NEXT_PUBLIC_SITE_URL = "https://next-movie-orpin.vercel.app";
+		const result = robots();
+		expect(result.sitemap).toBe("https://next-movie-orpin.vercel.app/sitemap.xml");
+		expect(result.rules).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					disallow: expect.arrayContaining(["/watched", "/api/"]),
+				}),
+			]),
+		);
+		if (previous === undefined) delete process.env.NEXT_PUBLIC_SITE_URL;
+		else process.env.NEXT_PUBLIC_SITE_URL = previous;
 	});
 });

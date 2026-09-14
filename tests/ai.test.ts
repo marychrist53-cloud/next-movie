@@ -312,6 +312,17 @@ describe("local chat routing", () => {
 		expect(fetchMediaList).not.toHaveBeenCalled();
 	});
 
+	it("does not wait on the movie model for a greeting", async () => {
+		process.env.AI_API_KEY = "sk-test-key";
+		process.env.AI_BASE_URL = "https://api.openai.com/v1";
+		const response = await answerChat([{ role: "user", content: "Hey" }]);
+
+		expect(generateOpenAIStream).not.toHaveBeenCalled();
+		expect(generateGeminiResponse).not.toHaveBeenCalled();
+		expect(response.mode).toBe("local");
+		expect(response.reply).toMatch(/hey|mood|genre|plot/i);
+	});
+
 	it("follows up on the last recommendations", async () => {
 		vi.mocked(fetchSimilar).mockResolvedValue([
 			{ ...movie, id: 3, title: "Another Space Movie" },

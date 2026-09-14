@@ -601,8 +601,12 @@ export async function answerChat(
 	const previous = lastAssistantResults(trimmed.slice(0, -1));
 	const llm = getChatLlm();
 	const onToken = options?.onToken;
+	const skipLlm =
+		!!lastUser &&
+		looksLikeSmalltalk(lastUser.content) &&
+		!CATALOG_INTENT.test(lastUser.content.toLowerCase());
 
-	if (llm && lastUser) {
+	if (llm && lastUser && !skipLlm) {
 		try {
 			const live = await liveCatalogHint(lastUser.content);
 			const draft =
@@ -645,6 +649,12 @@ export async function answerChat(
 const GEMINI_OPENAI_BASE =
 	"https://generativelanguage.googleapis.com/v1beta/openai";
 
+const AI_BUDGET_MS = 25_000;
+
+function remainingMs(started: number, budget = AI_BUDGET_MS) {
+	return Math.max(1_000, budget - (Date.now() - started));
+}
+
 async function streamOpenAIDraft({
 	apiKey,
 	baseUrl,
@@ -662,6 +672,7 @@ async function streamOpenAIDraft({
 	live: ChatResultItem[];
 	onToken?: (text: string) => void;
 }) {
+	const started = Date.now();
 	try {
 		return await generateOpenAIStream({
 			apiKey,
@@ -671,6 +682,7 @@ async function streamOpenAIDraft({
 			previous,
 			live,
 			onToken,
+			timeoutMs: Math.min(20_000, remainingMs(started)),
 		});
 	} catch (error) {
 		console.error("[chat] token streaming failed, retrying without stream", error);
@@ -681,6 +693,7 @@ async function streamOpenAIDraft({
 			messages,
 			previous,
 			live,
+			timeoutMs: remainingMs(started),
 		});
 	}
 }
@@ -702,6 +715,7 @@ async function generateGeminiDraft({
 	live: ChatResultItem[];
 	onToken?: (text: string) => void;
 }) {
+	const started = Date.now();
 	try {
 		return await generateOpenAIStream({
 			apiKey,
@@ -711,6 +725,7 @@ async function generateGeminiDraft({
 			previous,
 			live,
 			onToken,
+			timeoutMs: Math.min(20_000, remainingMs(started)),
 		});
 	} catch (error) {
 		console.error(
@@ -727,30 +742,21 @@ async function generateGeminiDraft({
 			messages,
 			previous,
 			live,
+			timeoutMs: remainingMs(started),
 		});
 	} catch (error) {
 		console.error(
 			"[chat] Gemini Interactions API failed, trying OpenAI-compatible Gemini",
 			error,
 		);
-		try {
-			return await generateOpenAIResponse({
-				apiKey,
-				baseUrl: GEMINI_OPENAI_BASE,
-				model,
-				messages,
-				previous,
-				live,
-			});
-		} catch {
-			return generateOpenAIResponse({
-				apiKey,
-				baseUrl: GEMINI_OPENAI_BASE,
-				model: fallbackModel,
-				messages,
-				previous,
-				live,
-			});
-		}
+		return generateOpenAIResponse({
+			apiKey,
+			baseUrl: GEMINI_OPENAI_BASE,
+			model: remainingMs(started) < 8_000 ? fallbackModel : model,
+			messages,
+			previous,
+			live,
+			timeoutMs: remainingMs(started),
+		});
 	}
 }

@@ -4,6 +4,7 @@ import { answerChat, type ChatMessage } from "@/lib/ai";
 import { rateLimit } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request-ip";
 
+export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 function encodeSse(event: unknown) {
@@ -30,6 +31,9 @@ function streamChat(messages: ChatMessage[]) {
 	const stream = new ReadableStream({
 		async start(controller) {
 			try {
+				// Flush immediately so proxies and the browser do not sit on a
+				// blank connection while the model warms up.
+				controller.enqueue(encoder.encode(": connected\n\n"));
 				let emitted = false;
 				const response = await answerChat(messages, {
 					onToken(text) {
@@ -76,8 +80,9 @@ function streamChat(messages: ChatMessage[]) {
 	return new Response(stream, {
 		headers: {
 			"Content-Type": "text/event-stream; charset=utf-8",
-			"Cache-Control": "no-store",
+			"Cache-Control": "no-cache, no-transform",
 			Connection: "keep-alive",
+			"X-Accel-Buffering": "no",
 		},
 	});
 }

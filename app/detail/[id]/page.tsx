@@ -20,6 +20,7 @@ import SectionHeading from "@/components/section-heading";
 import TrailerButton from "@/components/trailer-button";
 import VideoGrid from "@/components/video-grid";
 import WatchProviders from "@/components/watch-providers";
+import { siteUrl } from "@/lib/site";
 import {
 	fetchCast,
 	fetchMovie,
@@ -211,7 +212,7 @@ export default async function MovieDetail({ params }: Props) {
 		description: movie.overview,
 		image: imageUrl(movie.poster_path, "w780") ?? undefined,
 		datePublished: movie.release_date ?? undefined,
-		url: `/detail/${movie.id}`,
+		url: `${siteUrl()}/detail/${movie.id}`,
 		...(movie.vote_average > 0 && {
 			aggregateRating: {
 				"@type": "AggregateRating",

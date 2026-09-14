@@ -40,7 +40,7 @@ describe("chat route", () => {
 		);
 
 		expect(response.status).toBe(200);
-		expect(response.headers.get("cache-control")).toBe("no-store");
+		expect(response.headers.get("cache-control")).toBe("no-cache, no-transform");
 		expect(response.headers.get("content-type")).toContain("text/event-stream");
 		expect(await response.text()).toContain('"type":"done"');
 		expect(mockedAnswer).toHaveBeenCalledWith(
@@ -151,6 +151,33 @@ describe("chat route", () => {
 		expect(body).toContain("there");
 		expect(body).toContain('"type":"done"');
 		expect(body.indexOf('"type":"token"')).toBeLessThan(body.indexOf('"type":"done"'));
+	});
+
+	it("flushes an SSE prelude before the assistant finishes", async () => {
+		let finish!: (value: { reply: string; mode: "local" }) => void;
+		mockedAnswer.mockImplementation(
+			() =>
+				new Promise(resolve => {
+					finish = resolve;
+				}),
+		);
+
+		const response = await POST(
+			new Request("http://localhost/api/chat", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					messages: [{ role: "user", content: "Hi" }],
+				}),
+			}),
+		);
+
+		const reader = response.body?.getReader();
+		expect(reader).toBeTruthy();
+		const first = await reader!.read();
+		expect(new TextDecoder().decode(first.value)).toContain(": connected");
+		finish({ reply: "Hello", mode: "local" });
+		await reader!.cancel();
 	});
 
 	it("returns retry timing when rate limited", async () => {

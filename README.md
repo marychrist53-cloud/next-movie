@@ -6,7 +6,7 @@ release notifications, profiles, and administration.
 
 ## Local setup
 
-Requirements: Node.js 20+, a TMDB API Read Access Token, and optionally a
+Requirements: Node.js 22+, a TMDB API Read Access Token, and optionally a
 Google AI Studio API key for Gemini chat.
 
 ```bash

@@ -1,5 +1,7 @@
 import type { MetadataRoute } from "next";
 
+import { siteUrl } from "@/lib/site";
+
 export default function robots(): MetadataRoute.Robots {
 	return {
 		rules: [
@@ -9,5 +11,6 @@ export default function robots(): MetadataRoute.Robots {
 				disallow: ["/api/", "/admin", "/settings", "/notifications", "/watchlist", "/favorites", "/watched"],
 			},
 		],
+		sitemap: `${siteUrl()}/sitemap.xml`,
 	};
 }
