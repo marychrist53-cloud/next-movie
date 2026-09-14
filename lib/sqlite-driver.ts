@@ -162,7 +162,7 @@ export function getSqliteDriver(): Promise<SqliteDriver> {
 }
 
 export function hostedDatabaseError(
-	env: NodeJS.ProcessEnv = process.env,
+	env: NodeJS.Dict<string> = process.env,
 ): string | null {
 	const tursoUrl = env.TURSO_DATABASE_URL?.trim();
 	const tursoToken = env.TURSO_AUTH_TOKEN?.trim();
