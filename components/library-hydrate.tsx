@@ -11,16 +11,18 @@ export default function LibraryHydrate({
 	user,
 	watchlistIds,
 	favoriteIds,
+	watchedIds,
 }: {
 	user: SessionUser | null;
 	watchlistIds: string[];
 	favoriteIds: string[];
+	watchedIds: string[];
 }) {
 	const { hydrateAccount } = useLibrary();
 
 	useEffect(() => {
-		hydrateAccount({ user, watchlistIds, favoriteIds });
-	}, [favoriteIds, hydrateAccount, user, watchlistIds]);
+		hydrateAccount({ user, watchlistIds, favoriteIds, watchedIds });
+	}, [favoriteIds, hydrateAccount, user, watchedIds, watchlistIds]);
 
 	return null;
 }

@@ -2,16 +2,16 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import { CalendarDays, Star, Tv, User } from "lucide-react";
 
 import MovieGrid from "@/components/movie-grid";
 import CommentSection from "@/components/comment-section";
+import DetailAccountActions from "@/components/detail-account-actions";
 import JsonLd from "@/components/json-ld";
-import { FavoriteButton } from "@/components/watchlist-button";
-import NotifyButton from "@/components/notify-button";
-import RatingStars from "@/components/rating-stars";
 import TrailerButton from "@/components/trailer-button";
 import VideoGrid from "@/components/video-grid";
+import WatchProviders from "@/components/watch-providers";
 import SectionHeading from "@/components/section-heading";
 import {
 	fetchCast,
@@ -21,8 +21,6 @@ import {
 	imageUrl,
 	year,
 } from "@/lib/tmdb";
-import { getCurrentUser } from "@/lib/auth";
-import { getRating, isSubscribed } from "@/lib/db";
 import type {
 	CastMemberType,
 	MovieType,
@@ -102,9 +100,12 @@ export default async function TvDetail({ params }: Props) {
 		s => s.season_number > 0 && s.episode_count > 0,
 	);
 
-	const user = await getCurrentUser();
-	const userRating = user ? await getRating(user.id, "tv", show.id) : null;
-	const subscribed = user ? await isSubscribed(user.id, "tv", show.id) : false;
+	const movieForActions: MovieType = {
+		...show,
+		media_type: "tv",
+		title: show.name,
+		release_date: show.first_air_date,
+	};
 
 	const nextEp = show.next_episode_to_air;
 	const lastEp = show.last_episode_to_air;
@@ -207,20 +208,12 @@ export default async function TvDetail({ params }: Props) {
 					)}
 					<div className="mt-5 flex flex-wrap items-center gap-4">
 						{trailer && <TrailerButton videoKey={trailer.key} title={show.name} />}
-						<RatingStars
-							mediaType="tv"
-							id={show.id}
-							initialRating={userRating}
-						/>
-						<div className="flex items-center gap-2">
-							<FavoriteButton movie={{ ...show, media_type: "tv", title: show.name, release_date: show.first_air_date }} size="large" />
-							<NotifyButton
-								mediaType="tv"
-								mediaId={show.id}
-								title={show.name}
-								subscribed={subscribed}
-							/>
-						</div>
+						<Suspense
+							fallback={
+								<div className="h-10 w-56 animate-pulse rounded-full bg-muted" />
+							}>
+							<DetailAccountActions movie={movieForActions} />
+						</Suspense>
 					</div>
 				</div>
 			</section>
@@ -284,6 +277,13 @@ export default async function TvDetail({ params }: Props) {
 					)}
 				</div>
 			</section>
+
+			<Suspense
+				fallback={
+					<div className="h-24 animate-pulse rounded-2xl bg-muted" />
+				}>
+				<WatchProviders mediaType="tv" id={id} />
+			</Suspense>
 
 			{!!videos.length && (
 				<section>
@@ -374,7 +374,12 @@ export default async function TvDetail({ params }: Props) {
 				</section>
 			)}
 
-			<CommentSection mediaType="tv" mediaId={show.id} />
+			<Suspense
+				fallback={
+					<div className="h-48 animate-pulse rounded-2xl bg-muted" />
+				}>
+				<CommentSection mediaType="tv" mediaId={show.id} />
+			</Suspense>
 		</div>
 	);
 }

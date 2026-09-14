@@ -18,12 +18,13 @@ vi.mock("@/lib/llm", async importOriginal => {
 	return {
 		...actual,
 		generateOpenAIResponse: vi.fn(),
+		generateOpenAIStream: vi.fn(),
 	};
 });
 
 import { answerChat } from "@/lib/ai";
 import { generateGeminiResponse } from "@/lib/gemini";
-import { generateOpenAIResponse } from "@/lib/llm";
+import { generateOpenAIStream } from "@/lib/llm";
 import {
 	fetchDiscover,
 	fetchGenres,
@@ -136,7 +137,7 @@ describe("local chat routing", () => {
 		process.env.AI_API_KEY = "sk-test-key";
 		process.env.AI_BASE_URL = "https://api.openai.com/v1";
 		process.env.AI_MODEL = "gpt-4o-mini";
-		vi.mocked(generateOpenAIResponse).mockResolvedValue({
+		vi.mocked(generateOpenAIStream).mockResolvedValue({
 			reply: "That sounds like Inception — Nolan's dream-heist film.",
 			titles: ["Inception"],
 		});
@@ -159,7 +160,7 @@ describe("local chat routing", () => {
 			{ role: "user", content: "A thief who enters people's dreams" },
 		]);
 
-		expect(generateOpenAIResponse).toHaveBeenCalledWith(
+		expect(generateOpenAIStream).toHaveBeenCalledWith(
 			expect.objectContaining({
 				apiKey: "sk-test-key",
 				model: "gpt-4o-mini",
@@ -174,9 +175,9 @@ describe("local chat routing", () => {
 		});
 	});
 
-	it("uses Gemini when the configured key is a Google AI Studio key", async () => {
+	it("streams Gemini through the OpenAI-compatible endpoint", async () => {
 		process.env.AI_API_KEY = "google-studio-key";
-		vi.mocked(generateGeminiResponse).mockResolvedValue({
+		vi.mocked(generateOpenAIStream).mockResolvedValue({
 			reply: "Christopher Nolan directed Inception.",
 			titles: ["Inception"],
 		});
@@ -198,9 +199,13 @@ describe("local chat routing", () => {
 			{ role: "user", content: "Who directed Inception?" },
 		]);
 
-		expect(generateGeminiResponse).toHaveBeenCalledWith(
-			expect.objectContaining({ apiKey: "google-studio-key" }),
+		expect(generateOpenAIStream).toHaveBeenCalledWith(
+			expect.objectContaining({
+				apiKey: "google-studio-key",
+				baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+			}),
 		);
+		expect(generateGeminiResponse).not.toHaveBeenCalled();
 		expect(response).toMatchObject({
 			mode: "ai",
 			reply: "Christopher Nolan directed Inception.",
@@ -208,12 +213,12 @@ describe("local chat routing", () => {
 		});
 	});
 
-	it("falls back to OpenAI-compatible Gemini when Interactions fails", async () => {
+	it("falls back to the Interactions API when Gemini streaming fails", async () => {
 		process.env.GEMINI_API_KEY = "google-studio-key";
-		vi.mocked(generateGeminiResponse).mockRejectedValue(
-			new Error("Gemini request failed with status 404."),
+		vi.mocked(generateOpenAIStream).mockRejectedValue(
+			new Error("AI request failed with status 404."),
 		);
-		vi.mocked(generateOpenAIResponse).mockResolvedValue({
+		vi.mocked(generateGeminiResponse).mockResolvedValue({
 			reply: "Nolan directed Inception in 2010.",
 			titles: ["Inception"],
 		});
@@ -228,14 +233,36 @@ describe("local chat routing", () => {
 			{ role: "user", content: "Who directed Inception?" },
 		]);
 
-		expect(generateOpenAIResponse).toHaveBeenCalledWith(
-			expect.objectContaining({
-				baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
-				apiKey: "google-studio-key",
-			}),
+		expect(generateGeminiResponse).toHaveBeenCalledWith(
+			expect.objectContaining({ apiKey: "google-studio-key" }),
 		);
 		expect(response.mode).toBe("ai");
 		expect(response.reply).toMatch(/Nolan/);
+	});
+
+	it("forwards streamed tokens from the model", async () => {
+		process.env.AI_API_KEY = "sk-test-key";
+		process.env.AI_BASE_URL = "https://api.openai.com/v1";
+		const tokens: string[] = [];
+		vi.mocked(generateOpenAIStream).mockImplementation(async ({ onToken }) => {
+			onToken?.("Inception ");
+			onToken?.("is a dream heist.");
+			return { reply: "Inception is a dream heist.", titles: ["Inception"] };
+		});
+		vi.mocked(fetchSearchMulti).mockResolvedValue({
+			page: 1,
+			total_pages: 1,
+			total_results: 1,
+			results: [{ ...movie, id: 27205, title: "Inception" }],
+		});
+
+		const response = await answerChat(
+			[{ role: "user", content: "Tell me about Inception" }],
+			{ onToken: text => tokens.push(text) },
+		);
+
+		expect(tokens).toEqual(["Inception ", "is a dream heist."]);
+		expect(response.reply).toBe("Inception is a dream heist.");
 	});
 
 	it("does not treat a recommendation follow-up as a plot search", async () => {

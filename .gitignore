@@ -43,3 +43,7 @@ next-env.d.ts
 
 # sqlite database
 data/
+
+# Turso dumps can contain user data
+*.dump.sql
+/backups/

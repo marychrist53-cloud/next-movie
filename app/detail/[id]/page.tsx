@@ -1,13 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
-import { cookies } from "next/headers";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import {
 	CalendarDays,
 	Clock,
 	Film,
-	MonitorPlay,
 	Rss,
 	Star,
 	User,
@@ -15,14 +14,12 @@ import {
 
 import MovieGrid from "@/components/movie-grid";
 import CommentSection from "@/components/comment-section";
+import DetailAccountActions from "@/components/detail-account-actions";
 import JsonLd from "@/components/json-ld";
-import { FavoriteButton } from "@/components/watchlist-button";
-import NotifyButton from "@/components/notify-button";
-import RatingStars from "@/components/rating-stars";
-import RegionSelect from "@/components/region-select";
 import SectionHeading from "@/components/section-heading";
 import TrailerButton from "@/components/trailer-button";
 import VideoGrid from "@/components/video-grid";
+import WatchProviders from "@/components/watch-providers";
 import {
 	fetchCast,
 	fetchMovie,
@@ -30,16 +27,12 @@ import {
 	fetchReviews,
 	fetchSimilar,
 	fetchVideos,
-	fetchWatchProviders,
 	imageUrl,
 	year,
 } from "@/lib/tmdb";
-import { getCurrentUser } from "@/lib/auth";
-import { getRating, isSubscribed } from "@/lib/db";
 import type {
 	CastMemberType,
 	MovieType,
-	ProviderType,
 	ReviewType,
 	VideoType,
 } from "@/types/global";
@@ -102,44 +95,6 @@ function avatarUrl(review: ReviewType): string | null {
 		return `https://image.tmdb.org/t/p/w92${path}`;
 	}
 	return path.replace(/^http:/, "https:");
-}
-
-function Providers({ providers, link, region }: { providers: ProviderType[]; link: string | null; region: string }) {
-	if (!providers.length && !link) return null;
-
-	return (
-		<section>
-			<div className="flex items-center justify-between gap-4">
-				<SectionHeading
-					icon={<MonitorPlay className="size-4.5" />}
-					title="Where to watch"
-					href={link ?? undefined}
-					linkLabel={link ? "JustWatch" : undefined}
-				/>
-				<RegionSelect region={region} />
-			</div>
-			{providers.length > 0 && (
-				<div className="mt-4 flex flex-wrap gap-3">
-					{providers.map(provider => (
-						<span
-							key={provider.provider_name}
-							title={`Stream on ${provider.provider_name}`}
-							className="group relative size-12 overflow-hidden rounded-xl bg-muted ring-1 ring-white/10 transition-transform hover:-translate-y-0.5 hover:ring-primary/50">
-							{provider.logo_path && (
-								<Image
-									src={imageUrl(provider.logo_path, "w92")!}
-									alt={provider.provider_name}
-									fill
-									sizes="48px"
-									className="object-cover"
-								/>
-							)}
-						</span>
-					))}
-				</div>
-			)}
-		</section>
-	);
 }
 
 function Reviews({ reviews }: { reviews: ReviewType[] }) {
@@ -248,18 +203,6 @@ export default async function MovieDetail({ params }: Props) {
 	else console.error(`[movie] failed to load release dates for ${id}`, datesResult.reason);
 
 	const trailer = videos[0] ?? null;
-	const user = await getCurrentUser();
-	const userRating = user ? await getRating(user.id, "movie", movie.id) : null;
-	const subscribed = user
-		? await isSubscribed(user.id, "movie", movie.id)
-		: false;
-	const region = (await cookies()).get("nm-region")?.value ?? "US";
-
-	const { providers, link } = await fetchWatchProviders(
-		"movie",
-		id,
-		region,
-	);
 
 	const jsonLd = {
 		"@context": "https://schema.org",
@@ -369,20 +312,12 @@ export default async function MovieDetail({ params }: Props) {
 					)}
 					<div className="mt-5 flex flex-wrap items-center gap-4">
 						{trailer && <TrailerButton videoKey={trailer.key} title={movie.title} />}
-						<RatingStars
-							mediaType="movie"
-							id={movie.id}
-							initialRating={userRating}
-						/>
-						<div className="flex items-center gap-2">
-							<FavoriteButton movie={movie} size="large" />
-							<NotifyButton
-								mediaType="movie"
-								mediaId={movie.id}
-								title={movie.title}
-								subscribed={subscribed}
-							/>
-						</div>
+						<Suspense
+							fallback={
+								<div className="h-10 w-56 animate-pulse rounded-full bg-muted" />
+							}>
+							<DetailAccountActions movie={movie} />
+						</Suspense>
 					</div>
 				</div>
 			</section>
@@ -434,7 +369,12 @@ export default async function MovieDetail({ params }: Props) {
 				</div>
 			</section>
 
-			<Providers providers={providers} link={link} region={region} />
+			<Suspense
+				fallback={
+					<div className="h-24 animate-pulse rounded-2xl bg-muted" />
+				}>
+				<WatchProviders mediaType="movie" id={id} />
+			</Suspense>
 
 			{!!videos.length && (
 				<section>
@@ -490,7 +430,12 @@ export default async function MovieDetail({ params }: Props) {
 
 			<Reviews reviews={reviews} />
 
-			<CommentSection mediaType="movie" mediaId={movie.id} />
+			<Suspense
+				fallback={
+					<div className="h-48 animate-pulse rounded-2xl bg-muted" />
+				}>
+				<CommentSection mediaType="movie" mediaId={movie.id} />
+			</Suspense>
 
 			<SimilarMovies id={id} />
 		</div>

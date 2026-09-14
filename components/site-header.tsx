@@ -4,7 +4,7 @@ import { Bell, Clapperboard, LogOut, Megaphone, Settings as SettingsIcon, Shield
 import { logoutAction } from "@/app/actions/auth";
 import SearchBar from "@/components/search-bar";
 import ThemeToggle from "@/components/theme-toggle";
-import { WatchlistLink } from "@/components/watchlist-button";
+import { WatchlistLink, WatchedLink } from "@/components/watchlist-button";
 import type { SessionUser } from "@/components/library-provider";
 
 export default function SiteHeader({
@@ -55,6 +55,7 @@ export default function SiteHeader({
 								</Link>
 
 								<WatchlistLink />
+								<WatchedLink />
 
 								{staff && (
 									<Link
@@ -99,6 +100,7 @@ export default function SiteHeader({
 						) : (
 							<div className="ml-1 flex items-center gap-2">
 								<WatchlistLink />
+								<WatchedLink />
 								<Link
 									href="/login"
 									className="inline-flex h-8 items-center rounded-full px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">

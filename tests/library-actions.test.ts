@@ -9,6 +9,7 @@ vi.mock("@/lib/db", () => ({
 	addFavorite: vi.fn(),
 	addNotifySub: vi.fn(),
 	addWatchlist: vi.fn(),
+	addWatched: vi.fn(),
 	adminDeleteComment: vi.fn(),
 	deleteComment: vi.fn(),
 	deleteRating: vi.fn(),
@@ -18,10 +19,12 @@ vi.mock("@/lib/db", () => ({
 	isFavorite: vi.fn(),
 	isSubscribed: vi.fn(),
 	isWatchlisted: vi.fn(),
+	isWatched: vi.fn(),
 	markAllNotificationsRead: vi.fn(),
 	removeFavorite: vi.fn(),
 	removeNotifySub: vi.fn(),
 	removeWatchlist: vi.fn(),
+	removeWatched: vi.fn(),
 	setRating: vi.fn(),
 	toggleCommentLike: vi.fn(),
 }));
@@ -36,7 +39,7 @@ import {
 	importLocalDataAction,
 	refreshNotificationsAction,
 } from "@/app/actions/library";
-import { addFavorite, addWatchlist, importRatings } from "@/lib/db";
+import { addFavorite, addWatchlist, addWatched, importRatings } from "@/lib/db";
 import { refreshNotificationsForUser } from "@/lib/notify";
 import { rateLimit } from "@/lib/rate-limit";
 
@@ -55,13 +58,14 @@ describe("library actions", () => {
 		vi.mocked(rateLimit).mockResolvedValue({ ok: true, retryAfterSec: 0 });
 	});
 
-	it("imports guest watchlist, ratings, and favorites", async () => {
+	it("imports guest watchlist, ratings, favorites, and watched titles", async () => {
 		const ratings = [{ mediaType: "movie" as const, id: 123, rating: 9 }];
-		const result = await importLocalDataAction([item], ratings, [item]);
+		const result = await importLocalDataAction([item], ratings, [item], [item]);
 
 		expect(result).toEqual({ ok: true });
 		expect(addWatchlist).toHaveBeenCalledWith(42, item);
 		expect(addFavorite).toHaveBeenCalledWith(42, item);
+		expect(addWatched).toHaveBeenCalledWith(42, item);
 		expect(importRatings).toHaveBeenCalledWith(42, ratings);
 	});
 

@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { generateOpenAIResponse, getChatLlm } from "@/lib/llm";
+import {
+	extractIncrementalReply,
+	generateOpenAIResponse,
+	generateOpenAIStream,
+	getChatLlm,
+} from "@/lib/llm";
 
 describe("getChatLlm", () => {
 	afterEach(() => {
@@ -88,6 +93,70 @@ describe("generateOpenAIResponse", () => {
 		expect(String(options.body)).not.toContain("secret-key");
 		expect(JSON.parse(String(options.body))).toMatchObject({
 			model: "gpt-4o-mini",
+			response_format: { type: "json_object" },
+		});
+		expect(JSON.parse(String(options.body)).stream).toBeUndefined();
+	});
+});
+
+describe("extractIncrementalReply", () => {
+	it("reads a growing reply from partial JSON", () => {
+		expect(extractIncrementalReply('{"reply": "Hel')).toBe("Hel");
+		expect(extractIncrementalReply('{"reply": "Hello\\nthere"')).toBe("Hello\nthere");
+		expect(extractIncrementalReply('```json\n{"reply": "Hi"')).toBe("Hi");
+		expect(extractIncrementalReply('{"titles":[]}')).toBe("");
+	});
+});
+
+describe("generateOpenAIStream", () => {
+	it("emits reply tokens as the model streams JSON", async () => {
+		const tokens: string[] = [];
+		const chunks = [
+			'data: {"choices":[{"delta":{"content":"{\\"reply\\": \\""}}]}\n\n',
+			'data: {"choices":[{"delta":{"content":"Incep"}}]}\n\n',
+			'data: {"choices":[{"delta":{"content":"tion is great\\", \\"titles\\": [\\"Inception\\"]}"}}]}\n\n',
+			"data: [DONE]\n\n",
+		];
+		const fetchMock = vi.fn(async () => {
+			const encoder = new TextEncoder();
+			let index = 0;
+			return new Response(
+				new ReadableStream({
+					pull(controller) {
+						if (index >= chunks.length) {
+							controller.close();
+							return;
+						}
+						controller.enqueue(encoder.encode(chunks[index]));
+						index += 1;
+					},
+				}),
+				{ headers: { "Content-Type": "text/event-stream" } },
+			);
+		});
+
+		const response = await generateOpenAIStream({
+			apiKey: "secret-key",
+			baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+			model: "gemini-3.8-flash",
+			messages: [{ role: "user", content: "Recommend Inception" }],
+			previous: [],
+			live: [],
+			onToken: text => tokens.push(text),
+			fetchImpl: fetchMock as unknown as typeof fetch,
+		});
+
+		expect(response).toEqual({
+			reply: "Inception is great",
+			titles: ["Inception"],
+		});
+		expect(tokens.join("")).toBe("Inception is great");
+		const [, options] = fetchMock.mock.calls[0] as unknown as [
+			string,
+			{ body?: string },
+		];
+		expect(JSON.parse(String(options.body))).toMatchObject({
+			stream: true,
 			response_format: { type: "json_object" },
 		});
 	});

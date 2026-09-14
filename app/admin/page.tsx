@@ -132,12 +132,13 @@ async function OverviewTab() {
 
 	return (
 		<div className="space-y-6">
-			<div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+			<div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
 				<Stat label="Users" value={stats.users} />
 				<Stat label="Comments" value={stats.comments} />
 				<Stat label="Ratings" value={stats.ratings} />
 				<Stat label="Watchlist" value={stats.watchlist} />
 				<Stat label="Favorites" value={stats.favorites} />
+				<Stat label="Watched" value={stats.watched} />
 				<Stat label="Alert subs" value={stats.notifySubs} />
 				<Stat label="Alerts sent" value={stats.notifications} />
 			</div>

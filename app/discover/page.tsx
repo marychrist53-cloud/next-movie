@@ -20,6 +20,8 @@ type Props = {
 		genres?: string;
 		vote?: string;
 		runtime?: string;
+		provider?: string;
+		region?: string;
 	}>;
 };
 
@@ -32,6 +34,8 @@ export default async function DiscoverPage({ searchParams }: Props) {
 		genres: genresParam,
 		vote,
 		runtime,
+		provider,
+		region,
 	} = await searchParams;
 
 	const page = Math.max(1, Math.min(Number(pageParam) || 1, 500));
@@ -52,6 +56,8 @@ export default async function DiscoverPage({ searchParams }: Props) {
 			dateTo: to,
 			minVote: vote,
 			maxRuntime: runtime,
+			watchProviders: provider?.split(",").filter(Boolean),
+			watchRegion: region,
 			page,
 		});
 	} catch (error) {
@@ -68,6 +74,8 @@ export default async function DiscoverPage({ searchParams }: Props) {
 	if (genresParam) query.genres = genresParam;
 	if (vote) query.vote = vote;
 	if (runtime) query.runtime = runtime;
+	if (provider) query.provider = provider;
+	if (region) query.region = region;
 
 	return (
 		<div className="space-y-6">
@@ -79,14 +87,14 @@ export default async function DiscoverPage({ searchParams }: Props) {
 					Discover
 				</h1>
 				<p className="mt-1 text-sm text-muted-foreground">
-					Mix genres, years, ratings and runtime to find your match.
+					Mix genres, years, ratings, runtime and streaming services to find your match.
 				</p>
 			</div>
 
 			<Suspense
 				fallback={<div className="h-[104px] animate-pulse rounded-2xl bg-muted" />}>
 				<MediaFilters
-					key={`${genresParam ?? ""}|${sort ?? ""}|${from ?? ""}|${to ?? ""}|${vote ?? ""}|${runtime ?? ""}`}
+					key={`${genresParam ?? ""}|${sort ?? ""}|${from ?? ""}|${to ?? ""}|${vote ?? ""}|${runtime ?? ""}|${provider ?? ""}|${region ?? ""}`}
 					genres={allGenres}
 					mode="discover"
 				/>

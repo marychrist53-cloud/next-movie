@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { fetchAnimeCatalog, fetchAnimeList, fetchMediaList } from "@/lib/tmdb";
+import { fetchAnimeCatalog, fetchAnimeList, fetchDiscover, fetchMediaList } from "@/lib/tmdb";
 
 function jsonList(results: Record<string, unknown>[]) {
 	return Response.json({
@@ -208,5 +208,29 @@ describe("fetchMediaList trending", () => {
 
 		expect(calledUrl(fetchMock, 0)).toContain("/trending/movie/week");
 		expect(calledUrl(fetchMock, 1)).toContain("/trending/tv/week");
+	});
+});
+
+describe("fetchDiscover watch providers", () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it("adds TMDB watch-provider and region filters", async () => {
+		const fetchMock = vi.fn(async () =>
+			jsonList([{ id: 1, title: "On Netflix", popularity: 20, vote_average: 8 }]),
+		);
+		vi.stubGlobal("fetch", fetchMock);
+
+		await fetchDiscover({
+			watchProviders: ["8", "999"],
+			watchRegion: "GB",
+		});
+
+		const url = calledUrl(fetchMock, 0);
+		expect(url).toContain("/discover/movie");
+		expect(url).toContain("with_watch_providers=8");
+		expect(url).toContain("watch_region=GB");
+		expect(url).not.toContain("999");
 	});
 });

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { SlidersHorizontal } from "lucide-react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
+import { WATCH_PROVIDERS } from "@/lib/tmdb";
 import type { GenreType } from "@/types/global";
 import { cn } from "@/lib/utils";
 
@@ -38,6 +39,8 @@ export default function MediaFilters({
 	);
 	const [minVote, setMinVote] = useState(searchParams.get("vote") ?? "");
 	const [maxRuntime, setMaxRuntime] = useState(searchParams.get("runtime") ?? "");
+	const [provider, setProvider] = useState(searchParams.get("provider") ?? "");
+	const [region, setRegion] = useState(searchParams.get("region") ?? "US");
 
 	function apply() {
 		const params = new URLSearchParams();
@@ -48,6 +51,8 @@ export default function MediaFilters({
 			if (selectedGenres.length) params.set("genres", selectedGenres.join(","));
 			if (minVote) params.set("vote", minVote);
 			if (maxRuntime) params.set("runtime", maxRuntime);
+			if (provider) params.set("provider", provider);
+			if (provider && region && region !== "US") params.set("region", region);
 		}
 		router.push(
 			`${window.location.pathname}${params.size ? `?${params}` : ""}`,
@@ -61,6 +66,8 @@ export default function MediaFilters({
 		setSelectedGenres([]);
 		setMinVote("");
 		setMaxRuntime("");
+		setProvider("");
+		setRegion("US");
 		router.push(window.location.pathname);
 	}
 
@@ -143,6 +150,39 @@ export default function MediaFilters({
 								))}
 							</select>
 						</label>
+
+						<label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+							Streaming
+							<select
+								value={provider}
+								onChange={e => setProvider(e.target.value)}
+								className={selectStyles}>
+								<option value="">Any service</option>
+								{WATCH_PROVIDERS.map(item => (
+									<option key={item.id} value={item.id}>
+										On {item.name}
+									</option>
+								))}
+							</select>
+						</label>
+
+						{provider && (
+							<label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+								Watch region
+								<select
+									value={region}
+									onChange={e => setRegion(e.target.value)}
+									className={selectStyles}>
+									{["US", "GB", "CA", "DE", "FR", "IN", "AU", "BR", "JP", "KR"].map(
+										code => (
+											<option key={code} value={code}>
+												{code}
+											</option>
+										),
+									)}
+								</select>
+							</label>
+						)}
 
 						<div className="flex w-full flex-col gap-2">
 							<span className="text-xs font-medium text-muted-foreground">

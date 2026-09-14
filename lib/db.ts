@@ -45,6 +45,18 @@ CREATE TABLE IF NOT EXISTS favorites (
   PRIMARY KEY (user_id, media_type, media_id)
 );
 
+CREATE TABLE IF NOT EXISTS watched_items (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  media_type TEXT NOT NULL,
+  media_id INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  poster_path TEXT,
+  release_date TEXT,
+  vote_average REAL NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, media_type, media_id)
+);
+
 CREATE TABLE IF NOT EXISTS ratings (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   media_type TEXT NOT NULL,
@@ -438,6 +450,14 @@ export const addFavorite = async (userId: number, item: Parameters<typeof librar
 export const removeFavorite = async (userId: number, mediaType: string, mediaId: number) =>
 	libraryDelete("favorites", userId, mediaType, mediaId);
 
+export const getWatched = async (userId: number) => libraryRows("watched_items", userId);
+export const isWatched = async (userId: number, mediaType: string, mediaId: number) =>
+	libraryHas("watched_items", userId, mediaType, mediaId);
+export const addWatched = async (userId: number, item: Parameters<typeof libraryInsert>[2]) =>
+	libraryInsert("watched_items", userId, item);
+export const removeWatched = async (userId: number, mediaType: string, mediaId: number) =>
+	libraryDelete("watched_items", userId, mediaType, mediaId);
+
 export async function getWatchlistIds(userId: number){
 	return (
 		plain(
@@ -453,6 +473,16 @@ export async function getFavoriteIds(userId: number){
 		plain(
 			await db
 				.prepare("SELECT media_type || '-' || media_id AS key FROM favorites WHERE user_id = ?")
+				.all(userId),
+		) as { key: string }[]
+	).map(r => r.key);
+}
+
+export async function getWatchedIds(userId: number){
+	return (
+		plain(
+			await db
+				.prepare("SELECT media_type || '-' || media_id AS key FROM watched_items WHERE user_id = ?")
 				.all(userId),
 		) as { key: string }[]
 	).map(r => r.key);
@@ -697,6 +727,7 @@ export async function getSiteStats() {
 		ratings: await count("SELECT COUNT(*) AS c FROM ratings"),
 		watchlist: await count("SELECT COUNT(*) AS c FROM watchlist_items"),
 		favorites: await count("SELECT COUNT(*) AS c FROM favorites"),
+		watched: await count("SELECT COUNT(*) AS c FROM watched_items"),
 		notifySubs: await count("SELECT COUNT(*) AS c FROM notify_subs"),
 		notifications: await count("SELECT COUNT(*) AS c FROM notifications"),
 	};

@@ -96,6 +96,32 @@ Set `TRUST_PROXY_HEADERS=1` on Vercel so rate limits key on the real client
 IP. Set `NEXT_PUBLIC_SITE_URL` to the production URL. Vercel Cron calls
 `/api/cron/notifications` daily and sends `Authorization: Bearer $CRON_SECRET`.
 
+## Turso backups
+
+Point-in-time recovery (PITR) is automatic on Turso. The free plan keeps
+about 24 hours of history for databases in the `default` group.
+
+Restore a copy from a timestamp (this creates a new database; it does not
+overwrite `next-movie`):
+
+```bash
+turso db create next-movie-restore \
+  --from-db next-movie \
+  --timestamp 2026-09-14T00:00:00Z \
+  --group default
+```
+
+Create an on-demand SQL dump locally when you need a file snapshot. Dumps
+contain user data — keep them out of git:
+
+```bash
+mkdir -p /tmp/next-movie-backups
+turso db export next-movie > /tmp/next-movie-backups/next-movie.dump.sql
+# or: turso db shell next-movie .dump > /tmp/next-movie-backups/next-movie.dump.sql
+```
+
+Do not commit dump files or print Turso auth tokens.
+
 ## Checks
 
 ```bash

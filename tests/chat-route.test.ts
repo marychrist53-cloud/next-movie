@@ -43,10 +43,13 @@ describe("chat route", () => {
 		expect(response.headers.get("cache-control")).toBe("no-store");
 		expect(response.headers.get("content-type")).toContain("text/event-stream");
 		expect(await response.text()).toContain('"type":"done"');
-		expect(mockedAnswer).toHaveBeenCalledWith([
-			{ role: "assistant", content: "Earlier", results: undefined },
-			{ role: "user", content: "x".repeat(2_000), results: undefined },
-		]);
+		expect(mockedAnswer).toHaveBeenCalledWith(
+			[
+				{ role: "assistant", content: "Earlier", results: undefined },
+				{ role: "user", content: "x".repeat(2_000), results: undefined },
+			],
+			expect.objectContaining({ onToken: expect.any(Function) }),
+		);
 	});
 
 	it("rejects oversized and invalid requests", async () => {
@@ -102,24 +105,52 @@ describe("chat route", () => {
 		);
 
 		expect(response.status).toBe(200);
-		expect(mockedAnswer).toHaveBeenCalledWith([
-			{
-				role: "assistant",
-				content: "Try these",
-				results: [
-					{
-						id: 1,
-						media_type: "movie",
-						title: "Space Movie",
-						poster_path: "/space.jpg",
-						release_date: "2026-01-01",
-						vote_average: 8,
-						overview: "A science-fiction adventure.",
-					},
-				],
-			},
-			{ role: "user", content: "more like that", results: undefined },
-		]);
+		expect(mockedAnswer).toHaveBeenCalledWith(
+			[
+				{
+					role: "assistant",
+					content: "Try these",
+					results: [
+						{
+							id: 1,
+							media_type: "movie",
+							title: "Space Movie",
+							poster_path: "/space.jpg",
+							release_date: "2026-01-01",
+							vote_average: 8,
+							overview: "A science-fiction adventure.",
+						},
+					],
+				},
+				{ role: "user", content: "more like that", results: undefined },
+			],
+			expect.objectContaining({ onToken: expect.any(Function) }),
+		);
+	});
+
+	it("forwards model tokens as they arrive, then sends done", async () => {
+		mockedAnswer.mockImplementation(async (_messages, options) => {
+			options?.onToken?.("Hello ");
+			options?.onToken?.("there");
+			return { reply: "Hello there", mode: "ai" };
+		});
+
+		const response = await POST(
+			new Request("http://localhost/api/chat", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					messages: [{ role: "user", content: "Hi" }],
+				}),
+			}),
+		);
+
+		const body = await response.text();
+		expect(body).toContain('"type":"token"');
+		expect(body).toContain("Hello ");
+		expect(body).toContain("there");
+		expect(body).toContain('"type":"done"');
+		expect(body.indexOf('"type":"token"')).toBeLessThan(body.indexOf('"type":"done"'));
 	});
 
 	it("returns retry timing when rate limited", async () => {

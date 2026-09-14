@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Heart, Bookmark } from "lucide-react";
+import { Heart, Bookmark, Eye } from "lucide-react";
 
 import { useLibrary, type LibraryItem } from "@/components/library-provider";
 import type { MovieType } from "@/types/global";
@@ -56,6 +56,51 @@ export function WatchlistHeart({
 	);
 }
 
+export function WatchedButton({
+	movie,
+	size = "default",
+	variant = "inline",
+}: {
+	movie: MovieType;
+	size?: "default" | "large";
+	variant?: "inline" | "overlay";
+}) {
+	const { watchedHas, toggleWatched, isReady, user } = useLibrary();
+	const saved = isReady && watchedHas(movie.media_type ?? "movie", movie.id);
+
+	return (
+		<button
+			type="button"
+			aria-label={saved ? "Remove from watched" : "Mark as watched"}
+			aria-pressed={saved}
+			title={
+				!user
+					? "Watched titles save on this device — log in to sync"
+					: saved
+						? "Remove from watched"
+						: "Mark as watched"
+			}
+			onClick={e => {
+				e.preventDefault();
+				e.stopPropagation();
+				toggleWatched(toLibraryItem(movie));
+			}}
+			className={cn(
+				baseStyles,
+				size === "large" && "size-10",
+				variant === "overlay"
+					? saved
+						? "bg-emerald-500 text-white"
+						: "bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-black/80 max-lg:opacity-100"
+					: saved
+						? "bg-emerald-500/15 text-emerald-400"
+						: "bg-muted text-muted-foreground hover:text-foreground",
+			)}>
+			<Eye className={cn("size-4", size === "large" && "size-5", saved && "fill-current")} />
+		</button>
+	);
+}
+
 export function FavoriteButton({
 	movie,
 	size = "default",
@@ -88,6 +133,25 @@ export function FavoriteButton({
 			)}>
 			<Bookmark className={cn("size-4", size === "large" && "size-5", saved && "fill-current")} />
 		</button>
+	);
+}
+
+export function WatchedLink() {
+	const { watchedCount, isReady } = useLibrary();
+	const count = isReady ? watchedCount : 0;
+
+	return (
+		<Link
+			href="/watched"
+			className="relative flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+			aria-label={`Watched (${count} titles)`}>
+			<Eye className="size-4.5" />
+			{count > 0 && (
+				<span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-500 px-1 text-[10px] font-bold text-white">
+					{count > 99 ? "99+" : count}
+				</span>
+			)}
+		</Link>
 	);
 }
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { answerChat, type ChatMessage, type ChatResponse } from "@/lib/ai";
+import { answerChat, type ChatMessage } from "@/lib/ai";
 import { rateLimit } from "@/lib/rate-limit";
 import { getClientIp } from "@/lib/request-ip";
 
@@ -25,24 +25,51 @@ function chunkReply(reply: string): string[] {
 	return chunks;
 }
 
-function streamChat(response: ChatResponse) {
+function streamChat(messages: ChatMessage[]) {
 	const encoder = new TextEncoder();
 	const stream = new ReadableStream({
-		start(controller) {
-			for (const text of chunkReply(response.reply)) {
-				controller.enqueue(encoder.encode(encodeSse({ type: "token", text })));
+		async start(controller) {
+			try {
+				let emitted = false;
+				const response = await answerChat(messages, {
+					onToken(text) {
+						if (!text) return;
+						emitted = true;
+						controller.enqueue(
+							encoder.encode(encodeSse({ type: "token", text })),
+						);
+					},
+				});
+				if (!emitted) {
+					for (const text of chunkReply(response.reply)) {
+						controller.enqueue(
+							encoder.encode(encodeSse({ type: "token", text })),
+						);
+					}
+				}
+				controller.enqueue(
+					encoder.encode(
+						encodeSse({
+							type: "done",
+							reply: response.reply,
+							results: response.results,
+							mode: response.mode,
+						}),
+					),
+				);
+				controller.close();
+			} catch (error) {
+				console.error("[chat] assistant failed", error);
+				controller.enqueue(
+					encoder.encode(
+						encodeSse({
+							type: "error",
+							error: "The assistant is unavailable right now.",
+						}),
+					),
+				);
+				controller.close();
 			}
-			controller.enqueue(
-				encoder.encode(
-					encodeSse({
-						type: "done",
-						reply: response.reply,
-						results: response.results,
-						mode: response.mode,
-					}),
-				),
-			);
-			controller.close();
 		},
 	});
 
@@ -129,13 +156,5 @@ export async function POST(request: Request) {
 		return NextResponse.json({ error: "No user message" }, { status: 400 });
 	}
 
-	try {
-		return streamChat(await answerChat(messages));
-	} catch (error) {
-		console.error("[chat] assistant failed", error);
-		return NextResponse.json(
-			{ error: "The assistant is unavailable right now." },
-			{ status: 503 },
-		);
-	}
+	return streamChat(messages);
 }

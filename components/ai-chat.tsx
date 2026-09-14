@@ -177,7 +177,13 @@ export default function AiChat() {
 					text?: string;
 					reply?: string;
 					results?: ResultItem[];
+					error?: string;
 				};
+				if (event.type === "error") {
+					throw new Error(
+						event.error ?? "I couldn't reply just now. Try again?",
+					);
+				}
 				if (event.type === "token" && typeof event.text === "string") {
 					reply += event.text;
 					onToken(event.text);

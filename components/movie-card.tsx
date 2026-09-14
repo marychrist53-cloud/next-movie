@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Film, Star } from "lucide-react";
 
-import { WatchlistHeart } from "@/components/watchlist-button";
+import { WatchlistHeart, WatchedButton } from "@/components/watchlist-button";
 import { imageUrl, year } from "@/lib/tmdb";
 import type { MovieType } from "@/types/global";
 import { cn } from "@/lib/utils";
@@ -48,8 +48,9 @@ export default function MovieCard({
 				</div>
 			</Link>
 
-			<div className="absolute left-2 top-2 z-10 transition-opacity">
+			<div className="absolute left-2 top-2 z-10 flex gap-1.5 transition-opacity">
 				<WatchlistHeart movie={movie} />
+				<WatchedButton movie={movie} variant="overlay" />
 			</div>
 
 			<div className="mt-2 px-0.5">

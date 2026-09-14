@@ -60,11 +60,17 @@ async function importWithRetry(
 	watchlist: LibraryItemInput[],
 	ratings: RatingInput[],
 	favorites: LibraryItemInput[],
+	watched: LibraryItemInput[],
 ) {
 	let lastError: unknown;
 	for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
 		try {
-			const result = await importLocalDataAction(watchlist, ratings, favorites);
+			const result = await importLocalDataAction(
+				watchlist,
+				ratings,
+				favorites,
+				watched,
+			);
 			if (!result.error) return result;
 			lastError = result.error;
 		} catch (error) {
@@ -100,18 +106,25 @@ export default function WatchlistSync() {
 
 		let watchlist: LibraryItemInput[] = [];
 		let favorites: LibraryItemInput[] = [];
+		let watched: LibraryItemInput[] = [];
 		let ratings: RatingInput[] = [];
 
 		try {
 			watchlist = readLibraryItems("nm-watchlist", true);
 			favorites = readLibraryItems("nm-favorites", false);
+			watched = readLibraryItems("nm-watched", false);
 			ratings = readRatings();
 		} catch (error) {
 			console.error("[library] could not read local data", error);
 			return;
 		}
 
-		if (!watchlist.length && !favorites.length && !ratings.length) {
+		if (
+			!watchlist.length &&
+			!favorites.length &&
+			!watched.length &&
+			!ratings.length
+		) {
 			try {
 				sessionStorage.setItem(syncKey, "1");
 				attemptedForUser.current = user.id;
@@ -122,16 +135,18 @@ export default function WatchlistSync() {
 		}
 
 		inFlight.current = true;
-		void importWithRetry(watchlist, ratings, favorites)
+		void importWithRetry(watchlist, ratings, favorites, watched)
 			.then(() => {
 				localStorage.removeItem("nm-watchlist");
 				localStorage.removeItem("nm-ratings");
 				localStorage.removeItem("nm-favorites");
+				localStorage.removeItem("nm-watched");
 				sessionStorage.setItem(syncKey, "1");
 				attemptedForUser.current = user.id;
 				window.dispatchEvent(new Event("nm-watchlist-changed"));
 				window.dispatchEvent(new Event("nm-ratings-changed"));
 				window.dispatchEvent(new Event("nm-favorites-changed"));
+				window.dispatchEvent(new Event("nm-watched-changed"));
 				window.location.reload();
 			})
 			.catch(error => {

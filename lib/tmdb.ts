@@ -591,6 +591,20 @@ export async function fetchWatchProviders(
 
 /* -------------------------------- discover -------------------------------- */
 
+export const WATCH_PROVIDERS = [
+	{ id: 8, name: "Netflix" },
+	{ id: 9, name: "Prime Video" },
+	{ id: 337, name: "Disney+" },
+	{ id: 15, name: "Hulu" },
+	{ id: 350, name: "Apple TV" },
+	{ id: 1899, name: "Max" },
+	{ id: 531, name: "Paramount+" },
+	{ id: 386, name: "Peacock" },
+	{ id: 283, name: "Crunchyroll" },
+] as const;
+
+const WATCH_PROVIDER_IDS = new Set(WATCH_PROVIDERS.map(provider => String(provider.id)));
+
 export type DiscoverParams = {
 	genres?: string[];
 	sortBy?: string;
@@ -598,6 +612,8 @@ export type DiscoverParams = {
 	dateTo?: string;
 	minVote?: string;
 	maxRuntime?: string;
+	watchProviders?: string[];
+	watchRegion?: string;
 	page?: number;
 };
 
@@ -608,6 +624,8 @@ export async function fetchDiscover({
 	dateTo,
 	minVote,
 	maxRuntime,
+	watchProviders,
+	watchRegion,
 	page = 1,
 }: DiscoverParams): Promise<PaginatedResult<MovieType>> {
 	const params: Record<string, string> = {
@@ -621,6 +639,14 @@ export async function fetchDiscover({
 	if (dateTo) params["primary_release_date.lte"] = `${dateTo}-12-31`;
 	if (minVote) params["vote_average.gte"] = minVote;
 	if (maxRuntime) params["with_runtime.lte"] = maxRuntime;
+	const providers = (watchProviders ?? []).filter(id => WATCH_PROVIDER_IDS.has(id));
+	if (providers.length) {
+		params.with_watch_providers = providers.join("|");
+		params.watch_region = /^[A-Z]{2}$/.test(watchRegion ?? "")
+			? (watchRegion as string)
+			: "US";
+		params.with_watch_monetization_types = "flatrate";
+	}
 
 	const res = await paginated<Record<string, unknown>>(
 		"/discover/movie",

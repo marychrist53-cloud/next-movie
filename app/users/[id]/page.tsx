@@ -8,6 +8,7 @@ import {
 	getFavorites,
 	getUserProfile,
 	getWatchlist,
+	getWatched,
 } from "@/lib/db";
 import type { MovieType } from "@/types/global";
 
@@ -53,6 +54,7 @@ export default async function UserProfilePage({ params }: Props) {
 
 	const watchlist = (await getWatchlist(userId)).map(toMovie);
 	const favorites = (await getFavorites(userId)).map(toMovie);
+	const watched = (await getWatched(userId)).map(toMovie);
 	const ratingsCount = await countRatingsForUser(userId);
 
 	return (
@@ -89,6 +91,10 @@ export default async function UserProfilePage({ params }: Props) {
 						<p className="text-xs text-muted-foreground">Favorites</p>
 					</div>
 					<div className="text-center">
+						<p className="text-2xl font-extrabold">{watched.length}</p>
+						<p className="text-xs text-muted-foreground">Watched</p>
+					</div>
+					<div className="text-center">
 						<p className="text-2xl font-extrabold">{ratingsCount}</p>
 						<p className="text-xs text-muted-foreground">Rated</p>
 					</div>
@@ -104,6 +110,13 @@ export default async function UserProfilePage({ params }: Props) {
 				<section>
 					<h2 className="text-xl font-bold tracking-tight">Favorites</h2>
 					<MovieGrid movies={favorites} className="mt-5" />
+				</section>
+			)}
+
+			{watched.length > 0 && (
+				<section>
+					<h2 className="text-xl font-bold tracking-tight">Watched</h2>
+					<MovieGrid movies={watched} className="mt-5" />
 				</section>
 			)}
 		</div>

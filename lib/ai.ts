@@ -6,7 +6,11 @@ import {
 	fetchSimilar,
 } from "@/lib/tmdb";
 import { generateGeminiResponse } from "@/lib/gemini";
-import { generateOpenAIResponse, getChatLlm } from "@/lib/llm";
+import {
+	generateOpenAIResponse,
+	generateOpenAIStream,
+	getChatLlm,
+} from "@/lib/llm";
 import type { MediaType, MovieType } from "@/types/global";
 
 export type ChatMessage = {
@@ -588,24 +592,29 @@ async function liveCatalogHint(text: string): Promise<ChatResultItem[]> {
 	return [];
 }
 
-export async function answerChat(messages: ChatMessage[]): Promise<ChatResponse> {
+export async function answerChat(
+	messages: ChatMessage[],
+	options?: { onToken?: (text: string) => void },
+): Promise<ChatResponse> {
 	const trimmed = messages.slice(-12);
 	const lastUser = [...trimmed].reverse().find(message => message.role === "user");
 	const previous = lastAssistantResults(trimmed.slice(0, -1));
 	const llm = getChatLlm();
+	const onToken = options?.onToken;
 
 	if (llm && lastUser) {
 		try {
 			const live = await liveCatalogHint(lastUser.content);
 			const draft =
 				llm.kind === "openai"
-					? await generateOpenAIResponse({
+					? await streamOpenAIDraft({
 							apiKey: llm.apiKey,
 							baseUrl: llm.baseUrl,
 							model: llm.model,
 							messages: trimmed,
 							previous,
 							live,
+							onToken,
 						})
 					: await generateGeminiDraft({
 							apiKey: llm.apiKey,
@@ -614,6 +623,7 @@ export async function answerChat(messages: ChatMessage[]): Promise<ChatResponse>
 							messages: trimmed,
 							previous,
 							live,
+							onToken,
 						});
 			const results = await resolveOfficialTitles(draft.titles, [
 				...previous,
@@ -632,6 +642,49 @@ export async function answerChat(messages: ChatMessage[]): Promise<ChatResponse>
 	return localAgent(trimmed);
 }
 
+const GEMINI_OPENAI_BASE =
+	"https://generativelanguage.googleapis.com/v1beta/openai";
+
+async function streamOpenAIDraft({
+	apiKey,
+	baseUrl,
+	model,
+	messages,
+	previous,
+	live,
+	onToken,
+}: {
+	apiKey: string;
+	baseUrl: string;
+	model: string;
+	messages: ChatMessage[];
+	previous: ChatResultItem[];
+	live: ChatResultItem[];
+	onToken?: (text: string) => void;
+}) {
+	try {
+		return await generateOpenAIStream({
+			apiKey,
+			baseUrl,
+			model,
+			messages,
+			previous,
+			live,
+			onToken,
+		});
+	} catch (error) {
+		console.error("[chat] token streaming failed, retrying without stream", error);
+		return generateOpenAIResponse({
+			apiKey,
+			baseUrl,
+			model,
+			messages,
+			previous,
+			live,
+		});
+	}
+}
+
 async function generateGeminiDraft({
 	apiKey,
 	model,
@@ -639,6 +692,7 @@ async function generateGeminiDraft({
 	messages,
 	previous,
 	live,
+	onToken,
 }: {
 	apiKey: string;
 	model: string;
@@ -646,7 +700,25 @@ async function generateGeminiDraft({
 	messages: ChatMessage[];
 	previous: ChatResultItem[];
 	live: ChatResultItem[];
+	onToken?: (text: string) => void;
 }) {
+	try {
+		return await generateOpenAIStream({
+			apiKey,
+			baseUrl: GEMINI_OPENAI_BASE,
+			model,
+			messages,
+			previous,
+			live,
+			onToken,
+		});
+	} catch (error) {
+		console.error(
+			"[chat] Gemini token streaming failed, trying Interactions API",
+			error,
+		);
+	}
+
 	try {
 		return await generateGeminiResponse({
 			apiKey,
@@ -664,7 +736,7 @@ async function generateGeminiDraft({
 		try {
 			return await generateOpenAIResponse({
 				apiKey,
-				baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+				baseUrl: GEMINI_OPENAI_BASE,
 				model,
 				messages,
 				previous,
@@ -673,7 +745,7 @@ async function generateGeminiDraft({
 		} catch {
 			return generateOpenAIResponse({
 				apiKey,
-				baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+				baseUrl: GEMINI_OPENAI_BASE,
 				model: fallbackModel,
 				messages,
 				previous,

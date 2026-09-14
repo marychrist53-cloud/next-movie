@@ -9,6 +9,7 @@ import {
 	addFavorite,
 	addNotifySub,
 	addWatchlist,
+	addWatched,
 	adminDeleteComment,
 	deleteComment,
 	deleteRating,
@@ -18,10 +19,12 @@ import {
 	isFavorite,
 	isSubscribed,
 	isWatchlisted,
+	isWatched,
 	markAllNotificationsRead,
 	removeFavorite,
 	removeNotifySub,
 	removeWatchlist,
+	removeWatched,
 	setRating,
 	toggleCommentLike,
 } from "@/lib/db";
@@ -42,6 +45,7 @@ function revalidateMedia(mediaType: string, mediaId: number) {
 	revalidatePath(mediaType === "tv" ? `/tv/${mediaId}` : `/detail/${mediaId}`);
 	revalidatePath("/watchlist");
 	revalidatePath("/favorites");
+	revalidatePath("/watched");
 	revalidatePath("/notifications");
 }
 
@@ -64,6 +68,18 @@ export async function toggleFavoriteAction(item: LibraryItemInput): Promise<Acti
 		await removeFavorite(user.id, item.media_type, item.media_id);
 	} else {
 		await addFavorite(user.id, item);
+	}
+	revalidateMedia(item.media_type, item.media_id);
+	return { ok: true };
+}
+
+export async function toggleWatchedAction(item: LibraryItemInput): Promise<ActionState> {
+	const user = await requireUser();
+	if (!isValidLibraryItem(item)) return { error: "Invalid title data." };
+	if (await isWatched(user.id, item.media_type, item.media_id)) {
+		await removeWatched(user.id, item.media_type, item.media_id);
+	} else {
+		await addWatched(user.id, item);
 	}
 	revalidateMedia(item.media_type, item.media_id);
 	return { ok: true };
@@ -254,20 +270,23 @@ export async function importLocalDataAction(
 	watchlist: LibraryItemInput[],
 	ratings: RatingInput[],
 	favorites: LibraryItemInput[],
+	watched: LibraryItemInput[] = [],
 ): Promise<ActionState> {
 	const user = await requireUser();
 
 	if (
 		!Array.isArray(watchlist) ||
 		!Array.isArray(ratings) ||
-		!Array.isArray(favorites)
+		!Array.isArray(favorites) ||
+		!Array.isArray(watched)
 	) {
 		return { error: "Invalid import data." };
 	}
 	if (
 		watchlist.length > 500 ||
 		ratings.length > 1000 ||
-		favorites.length > 500
+		favorites.length > 500 ||
+		watched.length > 500
 	) {
 		return { error: "Import is too large." };
 	}
@@ -275,10 +294,12 @@ export async function importLocalDataAction(
 	const validWatchlist = watchlist.filter(isValidLibraryItem);
 	const validRatings = ratings.filter(isValidRating);
 	const validFavorites = favorites.filter(isValidLibraryItem);
+	const validWatched = watched.filter(isValidLibraryItem);
 	if (
 		validWatchlist.length !== watchlist.length ||
 		validRatings.length !== ratings.length ||
-		validFavorites.length !== favorites.length
+		validFavorites.length !== favorites.length ||
+		validWatched.length !== watched.length
 	) {
 		return { error: "Import contains invalid data." };
 	}
@@ -288,6 +309,9 @@ export async function importLocalDataAction(
 	}
 	for (const item of validFavorites) {
 		await addFavorite(user.id, item);
+	}
+	for (const item of validWatched) {
+		await addWatched(user.id, item);
 	}
 	await importRatings(user.id, validRatings);
 

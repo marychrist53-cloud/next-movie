@@ -116,6 +116,141 @@ export function movieExpertInstruction({
 		.join("\n");
 }
 
+export function extractIncrementalReply(raw: string): string {
+	const text = raw.replace(/^```(?:json)?\s*/i, "");
+	const match = /"reply"\s*:\s*"/.exec(text);
+	if (!match || match.index === undefined) return "";
+
+	let index = match.index + match[0].length;
+	let reply = "";
+	while (index < text.length) {
+		const char = text[index];
+		if (char === "\\") {
+			if (index + 1 >= text.length) break;
+			const next = text[index + 1];
+			if (next === "n") reply += "\n";
+			else if (next === "t") reply += "\t";
+			else if (next === "r") reply += "\r";
+			else if (next === '"') reply += '"';
+			else if (next === "\\") reply += "\\";
+			else if (next === "/") reply += "/";
+			else if (next === "u") {
+				const hex = text.slice(index + 2, index + 6);
+				if (hex.length < 4 || !/^[0-9a-fA-F]{4}$/.test(hex)) break;
+				reply += String.fromCharCode(Number.parseInt(hex, 16));
+				index += 6;
+				continue;
+			} else {
+				reply += next;
+			}
+			index += 2;
+			continue;
+		}
+		if (char === '"') break;
+		reply += char;
+		index += 1;
+	}
+	return reply;
+}
+
+function openAIChatBody({
+	model,
+	messages,
+	previous,
+	live,
+	stream,
+}: {
+	model: string;
+	messages: ChatMessage[];
+	previous: ChatResultItem[];
+	live: ChatResultItem[];
+	stream?: boolean;
+}) {
+	return {
+		model,
+		temperature: 0.7,
+		stream: stream || undefined,
+		messages: [
+			{
+				role: "system",
+				content: movieExpertInstruction({ previous, live }),
+			},
+			...messages.slice(-12).map(message => ({
+				role: message.role,
+				content: message.content.slice(0, 2000),
+			})),
+		],
+		response_format: { type: "json_object" },
+	};
+}
+
+async function readOpenAIStream(
+	response: Response,
+	onToken?: (text: string) => void,
+): Promise<string> {
+	if (!response.body) throw new Error("AI returned no stream.");
+
+	const reader = response.body.getReader();
+	const decoder = new TextDecoder();
+	let buffer = "";
+	let content = "";
+	let lastReply = "";
+
+	const consume = (chunk: string) => {
+		content += chunk;
+		if (!onToken) return;
+		const reply = extractIncrementalReply(content);
+		if (reply.length > lastReply.length) {
+			onToken(reply.slice(lastReply.length));
+			lastReply = reply;
+		}
+	};
+
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		buffer += decoder.decode(value, { stream: true });
+		const lines = buffer.split(/\r?\n/);
+		buffer = lines.pop() ?? "";
+		for (const line of lines) {
+			const trimmed = line.trim();
+			if (!trimmed.startsWith("data:")) continue;
+			const data = trimmed.slice(5).trim();
+			if (!data || data === "[DONE]") continue;
+			try {
+				const payload = JSON.parse(data) as {
+					choices?: { delta?: { content?: string } }[];
+				};
+				const piece = payload.choices?.[0]?.delta?.content;
+				if (piece) consume(piece);
+			} catch {
+				// Ignore incomplete SSE payloads.
+			}
+		}
+	}
+
+	if (buffer.trim()) {
+		const trimmed = buffer.trim();
+		if (trimmed.startsWith("data:")) {
+			const data = trimmed.slice(5).trim();
+			if (data && data !== "[DONE]") {
+				try {
+					const payload = JSON.parse(data) as {
+						choices?: { delta?: { content?: string } }[];
+					};
+					const piece = payload.choices?.[0]?.delta?.content;
+					if (piece) consume(piece);
+				} catch {
+					// Ignore a trailing incomplete event.
+				}
+			}
+		}
+	}
+
+	if (!content) throw new Error("AI returned no text output.");
+	return content;
+}
+
 export function parseMovieChatDraft(raw: string): MovieChatDraft {
 	const text = raw
 		.trim()
@@ -183,21 +318,9 @@ export async function generateOpenAIResponse({
 			"Content-Type": "application/json",
 			Authorization: `Bearer ${apiKey}`,
 		},
-		body: JSON.stringify({
-			model,
-			temperature: 0.7,
-			messages: [
-				{
-					role: "system",
-					content: movieExpertInstruction({ previous, live }),
-				},
-				...messages.slice(-12).map(message => ({
-					role: message.role,
-					content: message.content.slice(0, 2000),
-				})),
-			],
-			response_format: { type: "json_object" },
-		}),
+		body: JSON.stringify(
+			openAIChatBody({ model, messages, previous, live }),
+		),
 		signal: AbortSignal.timeout(timeoutMs),
 	});
 
@@ -211,4 +334,49 @@ export async function generateOpenAIResponse({
 	const content = payload.choices?.[0]?.message?.content;
 	if (!content) throw new Error("AI returned no text output.");
 	return parseMovieChatDraft(content);
+}
+
+export async function generateOpenAIStream({
+	apiKey,
+	baseUrl,
+	model,
+	messages,
+	previous,
+	live,
+	onToken,
+	fetchImpl = fetch,
+	timeoutMs = 35_000,
+}: {
+	apiKey: string;
+	baseUrl: string;
+	model: string;
+	messages: ChatMessage[];
+	previous: ChatResultItem[];
+	live: ChatResultItem[];
+	onToken?: (text: string) => void;
+	fetchImpl?: typeof fetch;
+	timeoutMs?: number;
+}): Promise<MovieChatDraft> {
+	if (!apiKey.trim()) throw new Error("AI_API_KEY is not configured.");
+	if (!/^[a-z0-9._:/-]+$/i.test(model)) {
+		throw new Error("AI model configuration contains invalid characters.");
+	}
+
+	const response = await fetchImpl(`${baseUrl}/chat/completions`, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			Authorization: `Bearer ${apiKey}`,
+		},
+		body: JSON.stringify(
+			openAIChatBody({ model, messages, previous, live, stream: true }),
+		),
+		signal: AbortSignal.timeout(timeoutMs),
+	});
+
+	if (!response.ok) {
+		throw new Error(`AI request failed with status ${response.status}.`);
+	}
+
+	return parseMovieChatDraft(await readOpenAIStream(response, onToken));
 }
