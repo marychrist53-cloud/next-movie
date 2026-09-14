@@ -161,23 +161,29 @@ export function getSqliteDriver(): Promise<SqliteDriver> {
 	return driverPromise;
 }
 
+export function hostedDatabaseError(
+	env: NodeJS.ProcessEnv = process.env,
+): string | null {
+	const tursoUrl = env.TURSO_DATABASE_URL?.trim();
+	const tursoToken = env.TURSO_AUTH_TOKEN?.trim();
+	if (tursoUrl && !tursoToken) {
+		return "TURSO_DATABASE_URL is set but TURSO_AUTH_TOKEN is missing";
+	}
+	if (env.VERCEL && !tursoUrl) {
+		return "TURSO_DATABASE_URL and TURSO_AUTH_TOKEN are required on Vercel";
+	}
+	return null;
+}
+
 async function openDriver(): Promise<SqliteDriver> {
+	const configError = hostedDatabaseError();
+	if (configError) throw new Error(configError);
+
 	const tursoUrl = process.env.TURSO_DATABASE_URL?.trim();
 	const tursoToken = process.env.TURSO_AUTH_TOKEN?.trim();
 
-	if (tursoUrl) {
-		if (!tursoToken) {
-			throw new Error(
-				"TURSO_DATABASE_URL is set but TURSO_AUTH_TOKEN is missing",
-			);
-		}
+	if (tursoUrl && tursoToken) {
 		return createTursoDriver(tursoUrl, tursoToken);
-	}
-
-	if (process.env.VERCEL) {
-		throw new Error(
-			"TURSO_DATABASE_URL and TURSO_AUTH_TOKEN are required on Vercel",
-		);
 	}
 
 	const filePath =
