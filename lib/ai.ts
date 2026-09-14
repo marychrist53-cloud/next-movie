@@ -164,6 +164,17 @@ function findGenreKey(text: string): string | undefined {
 	return Object.keys(GENRES).find(genre => lower.includes(genre));
 }
 
+function catalogSearchQueries(text: string): string[] {
+	const trimmed = text.replace(/[?!.]+$/g, "").trim();
+	const stripped = trimmed
+		.replace(
+			/^(who(?:'s| is)? (?:the )?(?:director of|directed)|who (?:starred in|wrote|produced|made)|what(?:'s| is)|tell me about|recommend(?: me)?)\s+/i,
+			"",
+		)
+		.trim();
+	return [...new Set([stripped, trimmed].filter(item => item.length >= 2))];
+}
+
 function lastAssistantResults(messages: ChatMessage[]): ChatResultItem[] {
 	for (let index = messages.length - 1; index >= 0; index -= 1) {
 		const message = messages[index];
@@ -508,14 +519,17 @@ async function localAgent(messages: ChatMessage[]): Promise<ChatResponse> {
 			};
 		}
 
-		const search = await fetchSearchMulti(text, 1);
-		if (search.results.length) {
-			const best = search.results[0];
-			return {
-				reply: `Top match: ${best.title}${best.release_date ? ` (${best.release_date.slice(0, 4)})` : ""}. ${best.overview?.slice(0, 180) ?? ""}`,
-				results: search.results.slice(0, 8).map(toResultItem),
-				mode: "local",
-			};
+		const searchQueries = catalogSearchQueries(text);
+		for (const query of searchQueries) {
+			const search = await fetchSearchMulti(query, 1);
+			if (search.results.length) {
+				const best = search.results[0];
+				return {
+					reply: `Top match: ${best.title}${best.release_date ? ` (${best.release_date.slice(0, 4)})` : ""}. ${best.overview?.slice(0, 180) ?? ""}`,
+					results: search.results.slice(0, 8).map(toResultItem),
+					mode: "local",
+				};
+			}
 		}
 
 		return {

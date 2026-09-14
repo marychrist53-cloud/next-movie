@@ -303,6 +303,22 @@ describe("local chat routing", () => {
 		expect(response.results?.[0].title).toBe("Another Space Movie");
 	});
 
+	it("strips question phrasing before searching the catalog", async () => {
+		vi.mocked(fetchSearchMulti).mockResolvedValue({
+			page: 1,
+			total_pages: 1,
+			total_results: 1,
+			results: [{ ...movie, id: 27205, title: "Inception" }],
+		});
+
+		const response = await answerChat([
+			{ role: "user", content: "Who directed Inception?" },
+		]);
+
+		expect(fetchSearchMulti).toHaveBeenCalledWith("Inception", 1);
+		expect(response.results?.[0].title).toBe("Inception");
+	});
+
 	it("answers greetings without searching the catalog", async () => {
 		const response = await answerChat([{ role: "user", content: "Hey" }]);
 
