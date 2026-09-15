@@ -40,6 +40,9 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
 	images: {
+		// TMDB already serves sized JPEGs. Vercel Hobby Image Optimization
+		// (5k transforms/month) 402s new posters once the cap is hit.
+		unoptimized: true,
 		remotePatterns: [
 			{
 				protocol: "https",
