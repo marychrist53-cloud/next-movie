@@ -25,7 +25,7 @@ Fill in `.env` before starting, then open <http://localhost:3000>.
 - `GEMINI_API_KEY` — server-only Google AI Studio key used when `AI_API_KEY`
   is absent. If the model is unavailable, chat falls back to the local TMDB
   assistant.
-- `GEMINI_MODEL` — optional model ID; defaults to `gemini-3.6-flash`.
+- `GEMINI_MODEL` — optional model ID; defaults to `gemini-3.5-flash`.
 - `GEMINI_MODEL_FALLBACK` — defaults to `gemini-3.5-flash` and is retried when
   the requested Gemini model is unavailable, inaccessible, or out of quota.
 - `NEXT_PUBLIC_SITE_URL` — canonical URL used by metadata and the sitemap.

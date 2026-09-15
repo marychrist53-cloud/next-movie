@@ -5,7 +5,7 @@ import {
 	type MovieChatDraft,
 } from "@/lib/llm";
 
-export const DEFAULT_GEMINI_MODEL = "gemini-3.6-flash";
+export const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
 export const DEFAULT_GEMINI_FALLBACK_MODEL = "gemini-3.5-flash";
 const GENERATE_CONTENT_URL = (model: string) =>
 	`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;

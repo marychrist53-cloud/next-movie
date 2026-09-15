@@ -8,7 +8,7 @@ vi.mock("@/lib/tmdb", () => ({
 	fetchSimilar: vi.fn(),
 }));
 vi.mock("@/lib/gemini", () => ({
-	DEFAULT_GEMINI_MODEL: "gemini-3.6-flash",
+	DEFAULT_GEMINI_MODEL: "gemini-3.5-flash",
 	DEFAULT_GEMINI_FALLBACK_MODEL: "gemini-3.5-flash",
 	generateGeminiResponse: vi.fn(),
 	generateGeminiContent: vi.fn(),
