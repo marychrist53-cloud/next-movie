@@ -176,36 +176,45 @@ export async function generateGeminiContent({
 		throw new Error("Gemini model configuration contains invalid characters.");
 	}
 
+	const startedAt = Date.now();
 	let response: Response | null = null;
 	for (const [index, candidateModel] of models.entries()) {
-		response = await fetchImpl(GENERATE_CONTENT_URL(candidateModel), {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				"x-goog-api-key": apiKey,
-			},
-			body: JSON.stringify({
-				systemInstruction: {
-					parts: [{ text: movieExpertInstruction({ previous, live }) }],
+		const remaining = timeoutMs - (Date.now() - startedAt);
+		if (remaining < 1_000) break;
+
+		try {
+			response = await fetchImpl(GENERATE_CONTENT_URL(candidateModel), {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					"x-goog-api-key": apiKey,
 				},
-				contents: conversationContents(messages),
-				generationConfig: {
-					responseMimeType: "application/json",
-					responseSchema: {
-						type: "OBJECT",
-						properties: {
-							reply: { type: "STRING" },
-							titles: {
-								type: "ARRAY",
-								items: { type: "STRING" },
-							},
-						},
-						required: ["reply", "titles"],
+				body: JSON.stringify({
+					systemInstruction: {
+						parts: [{ text: movieExpertInstruction({ previous, live }) }],
 					},
-				},
-			}),
-			signal: AbortSignal.timeout(timeoutMs),
-		});
+					contents: conversationContents(messages),
+					generationConfig: {
+						responseMimeType: "application/json",
+						responseSchema: {
+							type: "OBJECT",
+							properties: {
+								reply: { type: "STRING" },
+								titles: {
+									type: "ARRAY",
+									items: { type: "STRING" },
+								},
+							},
+							required: ["reply", "titles"],
+						},
+					},
+				}),
+				signal: AbortSignal.timeout(Math.min(index === 0 ? 12_000 : 8_000, remaining)),
+			});
+		} catch (error) {
+			if (index < models.length - 1) continue;
+			throw error;
+		}
 
 		if (response.ok) break;
 		const canTryFallback =
@@ -215,7 +224,9 @@ export async function generateGeminiContent({
 		}
 	}
 
-	if (!response?.ok) throw new Error("Gemini request failed.");
+	if (!response?.ok) {
+		throw new Error("Gemini models are temporarily unavailable or over quota.");
+	}
 	return extractGenerateContent(
 		(await response.json()) as {
 			candidates?: { content?: { parts?: { text?: string }[] } }[];

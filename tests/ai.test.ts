@@ -179,45 +179,7 @@ describe("local chat routing", () => {
 		});
 	});
 
-	it("streams Gemini through the OpenAI-compatible endpoint", async () => {
-		process.env.AI_API_KEY = "google-studio-key";
-		vi.mocked(generateOpenAIStream).mockResolvedValue({
-			reply: "Christopher Nolan directed Inception.",
-			titles: ["Inception"],
-		});
-		vi.mocked(fetchSearchMulti).mockResolvedValue({
-			page: 1,
-			total_pages: 1,
-			total_results: 1,
-			results: [
-				{
-					...movie,
-					id: 27205,
-					title: "Inception",
-					poster_path: "/inception.jpg",
-				},
-			],
-		});
-
-		const response = await answerChat([
-			{ role: "user", content: "Who directed Inception?" },
-		]);
-
-		expect(generateOpenAIStream).toHaveBeenCalledWith(
-			expect.objectContaining({
-				apiKey: "google-studio-key",
-				baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
-			}),
-		);
-		expect(generateGeminiResponse).not.toHaveBeenCalled();
-		expect(response).toMatchObject({
-			mode: "ai",
-			reply: "Christopher Nolan directed Inception.",
-			results: [{ title: "Inception", id: 27205 }],
-		});
-	});
-
-	it("answers Gemini through generateContent before streaming", async () => {
+	it("answers Gemini through the native generateContent API", async () => {
 		process.env.AI_API_KEY = "google-studio-key";
 		vi.mocked(generateGeminiContent).mockResolvedValue({
 			reply: "Christopher Nolan directed Inception.",
@@ -249,33 +211,6 @@ describe("local chat routing", () => {
 			mode: "ai",
 			reply: "Christopher Nolan directed Inception.",
 		});
-	});
-
-	it("falls back to the Interactions API when Gemini streaming fails", async () => {
-		process.env.GEMINI_API_KEY = "google-studio-key";
-		vi.mocked(generateOpenAIStream).mockRejectedValue(
-			new Error("AI request failed with status 404."),
-		);
-		vi.mocked(generateGeminiResponse).mockResolvedValue({
-			reply: "Nolan directed Inception in 2010.",
-			titles: ["Inception"],
-		});
-		vi.mocked(fetchSearchMulti).mockResolvedValue({
-			page: 1,
-			total_pages: 1,
-			total_results: 1,
-			results: [{ ...movie, id: 27205, title: "Inception" }],
-		});
-
-		const response = await answerChat([
-			{ role: "user", content: "Who directed Inception?" },
-		]);
-
-		expect(generateGeminiResponse).toHaveBeenCalledWith(
-			expect.objectContaining({ apiKey: "google-studio-key" }),
-		);
-		expect(response.mode).toBe("ai");
-		expect(response.reply).toMatch(/Nolan/);
 	});
 
 	it("forwards streamed tokens from the model", async () => {
@@ -355,6 +290,45 @@ describe("local chat routing", () => {
 
 		expect(fetchSearchMulti).toHaveBeenCalledWith("Inception", 1);
 		expect(response.results?.[0].title).toBe("Inception");
+	});
+
+	it.each([
+		["Tell me about the movie Parasite", "Parasite"],
+		["Explain the ending of Shutter Island", "Shutter Island"],
+	])("extracts a title from %s", async (prompt, title) => {
+		vi.mocked(fetchSearchMulti).mockImplementation(async query => ({
+			page: 1,
+			total_pages: 1,
+			total_results: query === title ? 1 : 0,
+			results:
+				query === title
+					? [{ ...movie, title, id: title === "Parasite" ? 496243 : 11324 }]
+					: [],
+		}));
+
+		const response = await answerChat([{ role: "user", content: prompt }]);
+
+		expect(fetchSearchMulti).toHaveBeenCalledWith(title, 1);
+		expect(response.results?.[0].title).toBe(title);
+	});
+
+	it("explains when Gemini is unavailable instead of reporting no catalog match", async () => {
+		process.env.GEMINI_API_KEY = "google-studio-key";
+		vi.mocked(fetchSearchMulti).mockResolvedValue({
+			page: 1,
+			total_pages: 1,
+			total_results: 0,
+			results: [],
+		});
+
+		const response = await answerChat(
+			[{ role: "user", content: "Explain visual symbolism in this scene" }],
+			{ llmTimeoutMs: 40 },
+		);
+
+		expect(response.mode).toBe("local");
+		expect(response.reply).toMatch(/Gemini.*unavailable|API quota/i);
+		expect(response.reply).not.toMatch(/could not find anything/i);
 	});
 
 	it("answers greetings without searching the catalog", async () => {

@@ -5,7 +5,7 @@ import {
 	fetchSearchMulti,
 	fetchSimilar,
 } from "@/lib/tmdb";
-import { generateGeminiContent, generateGeminiResponse } from "@/lib/gemini";
+import { generateGeminiContent } from "@/lib/gemini";
 import {
 	generateOpenAIResponse,
 	generateOpenAIStream,
@@ -168,9 +168,10 @@ function catalogSearchQueries(text: string): string[] {
 	const trimmed = text.replace(/[?!.]+$/g, "").trim();
 	const stripped = trimmed
 		.replace(
-			/^(who(?:'s| is)? (?:the )?(?:director of|directed)|who (?:starred in|wrote|produced|made)|what(?:'s| is)|tell me about|recommend(?: me)?)\s+/i,
+			/^(?:please\s+)?(?:can you\s+)?(?:who(?:'s| is)? (?:the )?(?:director of|directed)|who (?:starred in|wrote|produced|made)|what(?:'s| is)|tell me about|recommend(?: me)?|explain (?:the )?(?:ending|plot|story) of|explain)\s+/i,
 			"",
 		)
+		.replace(/^(?:the\s+)?(?:movie|film|show|series)\s+/i, "")
 		.trim();
 	return [...new Set([stripped, trimmed].filter(item => item.length >= 2))];
 }
@@ -317,7 +318,10 @@ async function similarToItem(
 	};
 }
 
-async function localAgent(messages: ChatMessage[]): Promise<ChatResponse> {
+async function localAgent(
+	messages: ChatMessage[],
+	options?: { modelUnavailable?: boolean },
+): Promise<ChatResponse> {
 	const ctx = conversationContext(messages);
 	const text = ctx.lastUser;
 	const lower = ctx.lower;
@@ -533,7 +537,9 @@ async function localAgent(messages: ChatMessage[]): Promise<ChatResponse> {
 		}
 
 		return {
-			reply: "I could not find anything for that. Try a title, a genre (e.g. \"90s horror\"), or describe a plot.",
+			reply: options?.modelUnavailable
+				? "Gemini is temporarily unavailable or over its API quota. I could not answer this from the live movie catalog alone—please retry shortly."
+				: "I could not find anything for that. Try a title, a genre (e.g. \"90s horror\"), or describe a plot.",
 			mode: "local",
 		};
 	} catch {
@@ -637,6 +643,7 @@ export async function answerChat(
 		!!lastUser &&
 		looksLikeSmalltalk(lastUser.content) &&
 		!CATALOG_INTENT.test(lastUser.content.toLowerCase());
+	let modelUnavailable = false;
 
 	if (llm && lastUser && !skipLlm) {
 		let cancelled = false;
@@ -666,7 +673,6 @@ export async function answerChat(
 									messages: trimmed,
 									previous,
 									live,
-									onToken,
 								});
 					return { draft, live };
 				})(),
@@ -684,17 +690,15 @@ export async function answerChat(
 			};
 		} catch (error) {
 			cancelled = true;
+			modelUnavailable = true;
 			console.error("[chat] AI movie expert failed, using local assistant", error);
 		}
 	}
 
-	return localAgent(trimmed);
+	return localAgent(trimmed, { modelUnavailable });
 }
 
-const GEMINI_OPENAI_BASE =
-	"https://generativelanguage.googleapis.com/v1beta/openai";
-
-const AI_BUDGET_MS = 12_000;
+const AI_BUDGET_MS = 20_000;
 
 function remainingMs(started: number, budget = AI_BUDGET_MS) {
 	return Math.max(1_000, budget - (Date.now() - started));
@@ -750,7 +754,6 @@ async function generateGeminiDraft({
 	messages,
 	previous,
 	live,
-	onToken,
 }: {
 	apiKey: string;
 	model: string;
@@ -758,67 +761,14 @@ async function generateGeminiDraft({
 	messages: ChatMessage[];
 	previous: ChatResultItem[];
 	live: ChatResultItem[];
-	onToken?: (text: string) => void;
 }) {
-	const started = Date.now();
-	try {
-		return await generateGeminiContent({
-			apiKey,
-			model,
-			fallbackModel,
-			messages,
-			previous,
-			live,
-			timeoutMs: Math.min(12_000, remainingMs(started)),
-		});
-	} catch (error) {
-		console.error(
-			"[chat] Gemini generateContent failed, trying token stream",
-			error,
-		);
-	}
-
-	try {
-		return await generateOpenAIStream({
-			apiKey,
-			baseUrl: GEMINI_OPENAI_BASE,
-			model,
-			messages,
-			previous,
-			live,
-			onToken,
-			timeoutMs: Math.min(4_000, remainingMs(started)),
-		});
-	} catch (error) {
-		console.error(
-			"[chat] Gemini token streaming failed, trying Interactions API",
-			error,
-		);
-	}
-
-	try {
-		return await generateGeminiResponse({
-			apiKey,
-			model,
-			fallbackModel,
-			messages,
-			previous,
-			live,
-			timeoutMs: remainingMs(started),
-		});
-	} catch (error) {
-		console.error(
-			"[chat] Gemini Interactions API failed, trying OpenAI-compatible Gemini",
-			error,
-		);
-		return generateOpenAIResponse({
-			apiKey,
-			baseUrl: GEMINI_OPENAI_BASE,
-			model: remainingMs(started) < 8_000 ? fallbackModel : model,
-			messages,
-			previous,
-			live,
-			timeoutMs: remainingMs(started),
-		});
-	}
+	return generateGeminiContent({
+		apiKey,
+		model,
+		fallbackModel,
+		messages,
+		previous,
+		live,
+		timeoutMs: AI_BUDGET_MS,
+	});
 }
