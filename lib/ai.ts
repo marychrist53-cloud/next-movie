@@ -5,7 +5,7 @@ import {
 	fetchSearchMulti,
 	fetchSimilar,
 } from "@/lib/tmdb";
-import { generateGeminiResponse } from "@/lib/gemini";
+import { generateGeminiContent, generateGeminiResponse } from "@/lib/gemini";
 import {
 	generateOpenAIResponse,
 	generateOpenAIStream,
@@ -762,6 +762,23 @@ async function generateGeminiDraft({
 }) {
 	const started = Date.now();
 	try {
+		return await generateGeminiContent({
+			apiKey,
+			model,
+			fallbackModel,
+			messages,
+			previous,
+			live,
+			timeoutMs: Math.min(12_000, remainingMs(started)),
+		});
+	} catch (error) {
+		console.error(
+			"[chat] Gemini generateContent failed, trying token stream",
+			error,
+		);
+	}
+
+	try {
 		return await generateOpenAIStream({
 			apiKey,
 			baseUrl: GEMINI_OPENAI_BASE,
@@ -770,7 +787,7 @@ async function generateGeminiDraft({
 			previous,
 			live,
 			onToken,
-			timeoutMs: Math.min(20_000, remainingMs(started)),
+			timeoutMs: Math.min(4_000, remainingMs(started)),
 		});
 	} catch (error) {
 		console.error(

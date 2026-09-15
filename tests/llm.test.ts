@@ -45,7 +45,7 @@ describe("getChatLlm", () => {
 		expect(getChatLlm()).toMatchObject({
 			kind: "gemini",
 			apiKey: "google-studio-key",
-			model: "gemini-3.8-flash",
+			model: "gemini-3.6-flash",
 		});
 	});
 });

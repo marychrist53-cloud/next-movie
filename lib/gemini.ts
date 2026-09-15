@@ -5,10 +5,26 @@ import {
 	type MovieChatDraft,
 } from "@/lib/llm";
 
-export const DEFAULT_GEMINI_MODEL = "gemini-3.8-flash";
+export const DEFAULT_GEMINI_MODEL = "gemini-3.6-flash";
 export const DEFAULT_GEMINI_FALLBACK_MODEL = "gemini-3.5-flash";
+const GENERATE_CONTENT_URL = (model: string) =>
+	`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 const INTERACTIONS_URL =
 	"https://generativelanguage.googleapis.com/v1beta/interactions";
+const RETRYABLE_STATUS = new Set([403, 404, 429, 503]);
+
+export function geminiCandidateModels(
+	model = DEFAULT_GEMINI_MODEL,
+	fallbackModel = DEFAULT_GEMINI_FALLBACK_MODEL,
+): string[] {
+	return [
+		...new Set(
+			[model, fallbackModel, "gemini-3.6-flash", "gemini-3.5-flash"].filter(
+				candidate => /^[a-z0-9._-]+$/i.test(candidate),
+			),
+		),
+	];
+}
 
 type GeminiInteraction = {
 	status?: string;
@@ -70,8 +86,8 @@ export async function generateGeminiResponse({
 	timeoutMs = 35_000,
 }: GeminiRequest): Promise<MovieChatDraft> {
 	if (!apiKey.trim()) throw new Error("GEMINI_API_KEY is not configured.");
-	const models = [...new Set([model, fallbackModel].filter(Boolean))];
-	if (models.some(candidate => !/^[a-z0-9._-]+$/i.test(candidate))) {
+	const models = geminiCandidateModels(model, fallbackModel);
+	if (!models.length) {
 		throw new Error("Gemini model configuration contains invalid characters.");
 	}
 
@@ -115,8 +131,7 @@ export async function generateGeminiResponse({
 
 		if (response.ok) break;
 		const canTryFallback =
-			index < models.length - 1 &&
-			[403, 404, 429].includes(response.status);
+			index < models.length - 1 && RETRYABLE_STATUS.has(response.status);
 		if (!canTryFallback) {
 			throw new Error(`Gemini request failed with status ${response.status}.`);
 		}
@@ -124,6 +139,88 @@ export async function generateGeminiResponse({
 
 	if (!response?.ok) throw new Error("Gemini request failed.");
 	return extractOutput((await response.json()) as GeminiInteraction);
+}
+
+function conversationContents(messages: ChatMessage[]) {
+	return messages.slice(-12).map(message => ({
+		role: message.role === "user" ? "user" : "model",
+		parts: [{ text: message.content.slice(0, 2000) }],
+	}));
+}
+
+function extractGenerateContent(payload: {
+	candidates?: { content?: { parts?: { text?: string }[] } }[];
+}): MovieChatDraft {
+	const text = (payload.candidates ?? [])
+		.flatMap(candidate => candidate.content?.parts ?? [])
+		.map(part => part.text ?? "")
+		.join("")
+		.trim();
+	if (!text) throw new Error("Gemini returned no text output.");
+	return parseMovieChatDraft(text);
+}
+
+export async function generateGeminiContent({
+	apiKey,
+	model = DEFAULT_GEMINI_MODEL,
+	fallbackModel = DEFAULT_GEMINI_FALLBACK_MODEL,
+	messages,
+	previous = [],
+	live = [],
+	fetchImpl = fetch,
+	timeoutMs = 15_000,
+}: GeminiRequest): Promise<MovieChatDraft> {
+	if (!apiKey.trim()) throw new Error("GEMINI_API_KEY is not configured.");
+	const models = geminiCandidateModels(model, fallbackModel);
+	if (!models.length) {
+		throw new Error("Gemini model configuration contains invalid characters.");
+	}
+
+	let response: Response | null = null;
+	for (const [index, candidateModel] of models.entries()) {
+		response = await fetchImpl(GENERATE_CONTENT_URL(candidateModel), {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				"x-goog-api-key": apiKey,
+			},
+			body: JSON.stringify({
+				systemInstruction: {
+					parts: [{ text: movieExpertInstruction({ previous, live }) }],
+				},
+				contents: conversationContents(messages),
+				generationConfig: {
+					responseMimeType: "application/json",
+					responseSchema: {
+						type: "OBJECT",
+						properties: {
+							reply: { type: "STRING" },
+							titles: {
+								type: "ARRAY",
+								items: { type: "STRING" },
+							},
+						},
+						required: ["reply", "titles"],
+					},
+				},
+			}),
+			signal: AbortSignal.timeout(timeoutMs),
+		});
+
+		if (response.ok) break;
+		const canTryFallback =
+			index < models.length - 1 && RETRYABLE_STATUS.has(response.status);
+		if (!canTryFallback) {
+			throw new Error(`Gemini request failed with status ${response.status}.`);
+		}
+	}
+
+	if (!response?.ok) throw new Error("Gemini request failed.");
+	return extractGenerateContent(
+		(await response.json()) as {
+			candidates?: { content?: { parts?: { text?: string }[] } }[];
+		},
+	);
 }
 
 export type PlotTitleGuess = {

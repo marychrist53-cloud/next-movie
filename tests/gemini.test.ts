@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { generateGeminiResponse, identifyPlotTitles } from "@/lib/gemini";
+import {
+	generateGeminiContent,
+	generateGeminiResponse,
+	identifyPlotTitles,
+} from "@/lib/gemini";
 
 function interaction(output: unknown): Response {
 	return Response.json({
@@ -140,5 +144,48 @@ describe("generateGeminiResponse", () => {
 				fetchImpl: malformedFetch,
 			}),
 		).rejects.toThrow("expected schema");
+	});
+});
+
+describe("generateGeminiContent", () => {
+	it("uses the native generateContent API and skips a 503 model", async () => {
+		const fetchMock = vi.fn(
+			async (input: RequestInfo | URL) => {
+				const url = String(input);
+				if (url.includes("gemini-3.8-flash")) {
+					return new Response("high demand", { status: 503 });
+				}
+				return Response.json({
+					candidates: [
+						{
+							content: {
+								parts: [
+									{
+										text: JSON.stringify({
+											reply: "Christopher Nolan directed Inception.",
+											titles: ["Inception"],
+										}),
+									},
+								],
+							},
+						},
+					],
+				});
+			},
+		);
+
+		const response = await generateGeminiContent({
+			apiKey: "secret-key",
+			model: "gemini-3.8-flash",
+			fallbackModel: "gemini-3.5-flash",
+			messages: [{ role: "user", content: "Who directed Inception?" }],
+			fetchImpl: fetchMock as unknown as typeof fetch,
+		});
+
+		expect(response.reply).toMatch(/Nolan/);
+		expect(fetchMock).toHaveBeenCalled();
+		expect(String(fetchMock.mock.calls[0][0])).toContain(
+			"models/gemini-3.8-flash:generateContent",
+		);
 	});
 });

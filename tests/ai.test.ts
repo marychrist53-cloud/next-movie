@@ -8,9 +8,10 @@ vi.mock("@/lib/tmdb", () => ({
 	fetchSimilar: vi.fn(),
 }));
 vi.mock("@/lib/gemini", () => ({
-	DEFAULT_GEMINI_MODEL: "gemini-3.8-flash",
+	DEFAULT_GEMINI_MODEL: "gemini-3.6-flash",
 	DEFAULT_GEMINI_FALLBACK_MODEL: "gemini-3.5-flash",
 	generateGeminiResponse: vi.fn(),
+	generateGeminiContent: vi.fn(),
 	identifyPlotTitles: vi.fn(),
 }));
 vi.mock("@/lib/llm", async importOriginal => {
@@ -23,7 +24,7 @@ vi.mock("@/lib/llm", async importOriginal => {
 });
 
 import { answerChat } from "@/lib/ai";
-import { generateGeminiResponse } from "@/lib/gemini";
+import { generateGeminiContent, generateGeminiResponse } from "@/lib/gemini";
 import { generateOpenAIStream } from "@/lib/llm";
 import {
 	fetchDiscover,
@@ -54,6 +55,9 @@ describe("local chat routing", () => {
 		delete process.env.AI_BASE_URL;
 		delete process.env.AI_MODEL;
 		vi.clearAllMocks();
+		vi.mocked(generateGeminiContent).mockRejectedValue(
+			new Error("native Gemini skipped in unit tests"),
+		);
 	});
 
 	afterAll(() => {
@@ -210,6 +214,40 @@ describe("local chat routing", () => {
 			mode: "ai",
 			reply: "Christopher Nolan directed Inception.",
 			results: [{ title: "Inception", id: 27205 }],
+		});
+	});
+
+	it("answers Gemini through generateContent before streaming", async () => {
+		process.env.AI_API_KEY = "google-studio-key";
+		vi.mocked(generateGeminiContent).mockResolvedValue({
+			reply: "Christopher Nolan directed Inception.",
+			titles: ["Inception"],
+		});
+		vi.mocked(fetchSearchMulti).mockResolvedValue({
+			page: 1,
+			total_pages: 1,
+			total_results: 1,
+			results: [
+				{
+					...movie,
+					id: 27205,
+					title: "Inception",
+					poster_path: "/inception.jpg",
+				},
+			],
+		});
+
+		const response = await answerChat([
+			{ role: "user", content: "Who directed Inception?" },
+		]);
+
+		expect(generateGeminiContent).toHaveBeenCalledWith(
+			expect.objectContaining({ apiKey: "google-studio-key" }),
+		);
+		expect(generateOpenAIStream).not.toHaveBeenCalled();
+		expect(response).toMatchObject({
+			mode: "ai",
+			reply: "Christopher Nolan directed Inception.",
 		});
 	});
 

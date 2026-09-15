@@ -29,7 +29,7 @@ function geminiModels(): { model: string; fallbackModel: string } {
 		model:
 			configured && /^gemini/i.test(configured)
 				? configured
-				: "gemini-3.8-flash",
+				: "gemini-3.6-flash",
 		fallbackModel:
 			process.env.GEMINI_MODEL_FALLBACK?.trim() || "gemini-3.5-flash",
 	};
